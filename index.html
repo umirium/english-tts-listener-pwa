@@ -7,29 +7,78 @@
   <title>English TTS Listener</title>
   <link rel="manifest" href="manifest.json" />
   <style>
-    :root { --bg:#0b0f14; --card:#121821; --text:#e5edf6; --muted:#9aa7b5; --line:#2b3644; --accent:#7cc4ff; --ok:#6ee7b7; --warn:#fbbf24; --danger:#fca5a5; }
-    *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;background:radial-gradient(circle at top, rgba(124,196,255,.08), transparent 30%),linear-gradient(180deg,#0a0e13 0%,#0b0f14 100%);color:var(--text);line-height:1.5}
-    .wrap{max-width:860px;margin:0 auto;padding:16px;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));border:1px solid var(--line);border-radius:22px;padding:16px;margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,.28);backdrop-filter:blur(8px)}
-    .app-header{display:flex;align-items:center;gap:14px}.app-icon{width:56px;height:56px;border-radius:16px;background:linear-gradient(180deg,#223447,#15202c);display:grid;place-items:center;font-size:24px;border:1px solid #314255;color:#fff;flex:0 0 auto}
-    h1{margin:0 0 6px;font-size:26px;letter-spacing:.01em}.sub{color:var(--muted);font-size:14px;margin:0}.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-    label{display:block;font-weight:700;margin-bottom:8px;letter-spacing:.01em} select,input[type="range"]{width:100%}
-    select{border:1px solid var(--line);border-radius:14px;padding:12px;background:#0f141b;color:var(--text);font-size:16px;outline:none}
-    .range-wrap{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:#0f141b}.range-top{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;font-size:14px}
-    textarea{width:100%;min-height:58vh;border:1px solid var(--line);border-radius:16px;padding:16px;font-size:20px;line-height:1.7;resize:vertical;background:#0f141b;color:var(--text);outline:none;-webkit-text-size-adjust:100%}
-    textarea:focus{border-color:#4b6a87;box-shadow:0 0 0 3px rgba(124,196,255,.12)}
-    .buttons{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:14px 0}
-    button{appearance:none;border:1px solid var(--line);background:linear-gradient(180deg,#17202a,#121922);color:var(--text);border-radius:16px;padding:14px 12px;font-size:16px;font-weight:800;cursor:pointer;min-height:52px}
-    button.primary{background:linear-gradient(180deg,#89d0ff,#61b8ff);color:#05111d;border-color:#8fd2ff} button:disabled{opacity:.45;cursor:default}
-    .status{display:inline-flex;align-items:center;gap:8px;margin-top:6px;padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.02);color:var(--muted);font-size:13px;font-weight:700}
-    .dot{width:10px;height:10px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 0 rgba(251,191,36,.35)} .dot.running{background:var(--ok);animation:pulse 1.4s infinite}
-    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(110,231,183,.35)}70%{box-shadow:0 0 0 10px rgba(110,231,183,0)}100%{box-shadow:0 0 0 0 rgba(110,231,183,0)}}
-    .small{font-size:13px;color:var(--muted);margin-top:10px}.saved-list{display:grid;gap:12px}.saved-item{border:1px solid var(--line);border-radius:18px;padding:14px;background:linear-gradient(180deg,#131b24,#10161e)}
-    .saved-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}.saved-preview{font-size:15px;line-height:1.5;color:var(--text);word-break:break-word;flex:1}.saved-date{font-size:12px;color:var(--muted);white-space:nowrap}
-    .saved-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:10px}.meta-box{border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(255,255,255,.02)}
-    .mk{font-size:11px;color:var(--muted);margin-bottom:4px}.mv{font-size:18px;font-weight:800}.saved-actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}.saved-actions button{padding:10px 14px;font-size:14px;border-radius:12px;min-height:44px}
-    .danger{color:var(--danger);border-color:rgba(252,165,165,.4)}.empty{color:var(--muted);font-size:14px}
-    @media (max-width:640px){.wrap{padding:12px;padding-bottom:calc(20px + env(safe-area-inset-bottom))}.grid-2,.saved-meta{grid-template-columns:1fr}.buttons{grid-template-columns:1fr 1fr}textarea{min-height:68vh;font-size:21px;line-height:1.75;padding:18px 16px}button{font-size:17px;min-height:56px}h1{font-size:24px}}
+    :root { --bg:#0b0f14; --card:#121821; --text:#e5edf6; --muted:#9aa7b5; --line:#2b3644; --accent:#7cc4ff; --ok:#6ee7b7; --warn:#fbbf24; --danger:#fca5a5; --highlight:#ff4fa3; --highlight-bg:rgba(255,79,163,.14); }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif; background:radial-gradient(circle at top, rgba(124,196,255,.08), transparent 30%),linear-gradient(180deg, #0a0e13 0%, #0b0f14 100%); color:var(--text); line-height:1.5; }
+    .wrap { max-width:860px; margin:0 auto; padding:16px; padding-bottom:calc(190px + env(safe-area-inset-bottom)); }
+    .card { background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01)); border:1px solid var(--line); border-radius:22px; padding:16px; margin-bottom:16px; box-shadow:0 8px 24px rgba(0,0,0,.28); backdrop-filter:blur(8px); }
+    .app-header { display:flex; align-items:center; gap:14px; }
+    .app-icon { width:56px; height:56px; border-radius:16px; background:linear-gradient(180deg, #223447, #15202c); display:grid; place-items:center; font-size:24px; border:1px solid #314255; color:#fff; flex:0 0 auto; }
+    h1 { margin:0 0 6px; font-size:26px; letter-spacing:.01em; }
+    .sub { color:var(--muted); font-size:14px; margin:0; }
+    label { display:block; font-weight:700; margin-bottom:8px; letter-spacing:.01em; }
+    select, input[type="range"] { width:100%; }
+    select { border:1px solid var(--line); border-radius:14px; padding:12px; background:#0f141b; color:var(--text); font-size:16px; outline:none; }
+    select:disabled, input[type="range"]:disabled { opacity:.55; }
+    .range-wrap { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:#0f141b; }
+    .range-top { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; font-size:14px; }
+    .ticks { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-top:6px; user-select:none; }
+    .editor-wrap, .reading-wrap { width:100%; }
+    textarea { width:100%; min-height:62vh; border:1px solid var(--line); border-radius:16px; padding:16px; font-size:20px; line-height:1.7; resize:vertical; background:#0f141b; color:var(--text); outline:none; -webkit-text-size-adjust:100%; }
+    textarea:focus { border-color:#4b6a87; box-shadow:0 0 0 3px rgba(124,196,255,.12); }
+    .reading-wrap { display:none; min-height:62vh; border:1px solid var(--line); border-radius:16px; background:#0f141b; padding:14px; overflow:auto; }
+    .sentence-list { display:grid; gap:10px; }
+    .sentence-item { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:rgba(255,255,255,.02); transition:background-color .15s ease,border-color .15s ease,transform .15s ease; line-height:1.8; font-size:19px; word-break:break-word; }
+    .sentence-item.active { background:var(--highlight-bg); border-color:var(--highlight); color:#fff; box-shadow:0 0 0 1px rgba(255,79,163,.25) inset; transform:translateY(-1px); }
+    .sentence-index { display:block; color:var(--muted); font-size:12px; margin-bottom:6px; }
+    .saved-list { display:grid; gap:12px; }
+    .saved-item { border:1px solid var(--line); border-radius:18px; padding:14px; background:linear-gradient(180deg, #131b24, #10161e); }
+    .saved-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:10px; }
+    .saved-preview { font-size:15px; line-height:1.5; color:var(--text); word-break:break-word; flex:1; }
+    .saved-date { font-size:12px; color:var(--muted); white-space:nowrap; }
+    .saved-meta { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; margin-top:10px; }
+    .meta-box { border:1px solid var(--line); border-radius:14px; padding:10px; background:rgba(255,255,255,.02); }
+    .mk { font-size:11px; color:var(--muted); margin-bottom:4px; }
+    .mv { font-size:18px; font-weight:800; }
+    .saved-actions { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    .saved-actions button { padding:10px 14px; font-size:14px; border-radius:12px; min-height:44px; }
+    .danger { color:var(--danger); border-color:rgba(252,165,165,.4); }
+    .empty { color:var(--muted); font-size:14px; }
+    button { appearance:none; border:1px solid var(--line); background:linear-gradient(180deg, #17202a, #121922); color:var(--text); border-radius:16px; padding:14px 12px; font-size:16px; font-weight:800; cursor:pointer; min-height:52px; }
+    button.primary { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
+    button:disabled { opacity:.45; cursor:default; }
+    .bottom-controls { position:fixed; left:0; right:0; bottom:0; z-index:30; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(8,12,17,.95); backdrop-filter:blur(10px); border-top:1px solid var(--line); }
+    .bottom-inner { max-width:860px; margin:0 auto; display:grid; gap:10px; }
+    .bottom-status-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .status-fixed { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.02); color:var(--muted); font-size:13px; font-weight:700; }
+    .dot { width:10px; height:10px; border-radius:50%; background:var(--warn); box-shadow:0 0 0 0 rgba(251,191,36,.35); }
+    .dot.running { background:var(--ok); animation:pulse 1.4s infinite; }
+    @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(110,231,183,.35);} 70% { box-shadow:0 0 0 10px rgba(110,231,183,0);} 100% { box-shadow:0 0 0 0 rgba(110,231,183,0);} }
+    .status-actions { display:flex; align-items:center; gap:8px; }
+    .compact-btn { font-size:13px; min-height:38px; padding:8px 10px; border-radius:12px; }
+    .compact-btn.active { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
+    .bottom-settings { display:none; border:1px solid var(--line); border-radius:16px; padding:12px; background:rgba(255,255,255,.02); }
+    .bottom-settings.show { display:block; }
+    .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .small-field label { font-size:12px; margin-bottom:6px; }
+    .small-field select { padding:10px; font-size:14px; }
+    .small-field .range-wrap { padding:10px 12px; }
+    .small-field .range-top { font-size:12px; }
+    .small-field .ticks { font-size:10px; }
+    .bottom-top { display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr; gap:10px; }
+    @media (max-width:640px) {
+      .wrap { padding:12px; padding-bottom:calc(210px + env(safe-area-inset-bottom)); }
+      textarea, .reading-wrap { min-height:64vh; }
+      textarea { font-size:21px; line-height:1.75; padding:18px 16px; }
+      .sentence-item { font-size:20px; line-height:1.8; }
+      h1 { font-size:24px; }
+      .saved-meta, .settings-grid { grid-template-columns:1fr; }
+      .bottom-status-row { align-items:center; flex-direction:row; }
+      .bottom-top { grid-template-columns:1fr 1.2fr 1fr 1fr; gap:8px; }
+      .bottom-top button { font-size:15px; min-height:54px; padding:12px 8px; }
+      .status-actions { gap:6px; }
+      .compact-btn { font-size:12px; min-height:34px; padding:6px 8px; }
+    }
   </style>
 </head>
 <body>
@@ -37,28 +86,69 @@
     <div class="card">
       <div class="app-header">
         <div class="app-icon">🔊</div>
-        <div><h1>English TTS Listener</h1><p class="sub">英字テキストを読み上げて、英語リスニング練習に使うアプリです。</p></div>
+        <div>
+          <h1>English TTS Listener</h1>
+          <p class="sub">英字テキストを読み上げて、英語リスニング練習に使うアプリです。</p>
+        </div>
       </div>
     </div>
+
     <div class="card">
-      <div class="grid-2">
-        <div><label for="voiceSelect">音声</label><select id="voiceSelect"></select></div>
-        <div><label for="rateRange">再生速度</label><div class="range-wrap"><div class="range-top"><span>Rate</span><span id="rateValue">1.0x</span></div><input id="rateRange" type="range" min="0.5" max="2.0" step="0.1" value="1.0" /></div></div>
-      </div>
-      <div class="buttons">
-        <button id="playBtn" class="primary">再生</button><button id="pauseBtn">一時停止</button><button id="resumeBtn">再開</button><button id="stopBtn">停止</button><button id="saveBtn">保存</button>
-      </div>
       <label for="text">英文</label>
-      <textarea id="text" placeholder="ここに英字テキストを貼り付けてください"></textarea>
-      <div class="small">テキスト・音声・再生速度は自動保存されます。再生はユーザー操作で開始してください。</div>
-      <div id="status" class="status"><span id="statusDot" class="dot"></span><span id="statusText">待機中</span></div>
+      <div id="editorWrap" class="editor-wrap">
+        <textarea id="text" placeholder="ここに英字テキストを貼り付けてください"></textarea>
+      </div>
+      <div id="readingWrap" class="reading-wrap">
+        <div id="sentenceList" class="sentence-list"></div>
+      </div>
     </div>
+
     <div class="card">
       <label>保存済みテキスト</label>
       <div id="savedList" class="saved-list"></div>
       <div id="emptyState" class="empty">まだ保存されたテキストはありません。</div>
     </div>
   </div>
+
+  <div class="bottom-controls">
+    <div class="bottom-inner">
+      <div class="bottom-status-row">
+        <div class="status-fixed"><span id="statusDot" class="dot"></span><span id="statusText">待機中</span></div>
+        <div class="status-actions">
+          <button id="repeatToggleBtn" class="compact-btn" aria-pressed="false" title="同じ文をリピート">🔁</button>
+          <button id="toggleSettingsBtn" class="compact-btn">設定</button>
+          <button id="saveBtn" class="compact-btn">保存</button>
+        </div>
+      </div>
+      <div id="bottomSettings" class="bottom-settings">
+        <div class="settings-grid">
+          <div class="small-field">
+            <label for="voiceSelect">音声モデル</label>
+            <select id="voiceSelect"></select>
+          </div>
+          <div class="small-field">
+            <label for="rateRange">再生速度</label>
+            <div class="range-wrap">
+              <div class="range-top"><span>Rate</span><span id="rateValue">1.0x</span></div>
+              <input id="rateRange" type="range" min="0.1" max="2.0" step="0.1" value="1.0" list="rateTicks" />
+              <datalist id="rateTicks">
+                <option value="0.1"></option><option value="0.5"></option><option value="1.0"></option><option value="1.5"></option><option value="2.0"></option>
+              </datalist>
+              <div class="ticks"><span>0.1</span><span>0.5</span><span>1.0</span><span>1.5</span><span>2.0</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <div class="bottom-top">
+        <button id="prevBtn">前の文</button>
+        <button id="togglePlayBtn" class="primary">再生</button>
+        <button id="nextBtn">次の文</button>
+        <button id="stopBtn">停止</button>
+      </div>
+    </div>
+  </div>
+
   <script src="storage.js"></script>
   <script src="speech.js"></script>
   <script src="app.js"></script>

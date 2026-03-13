@@ -16,7 +16,8 @@ const speechController = (() => {
     const allVoices = getVoices();
     const selected = allVoices.find(v => v.name === voiceName) || getEnglishVoices()[0] || allVoices[0];
     if (selected) { utter.voice = selected; utter.lang = selected.lang; } else { utter.lang = 'en-US'; }
-    utter.rate = Number(rate) || 1.0; utter.pitch = 1.0;
+    utter.rate = Number(rate) || 1.0;
+    utter.pitch = 1.0;
     utter.onstart = () => { if (onStart) onStart(selected || null); };
     utter.onend = () => { if (onEnd) onEnd(selected || null); };
     utter.onerror = (event) => { if (onError) onError(event, selected || null); };
