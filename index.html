@@ -55,7 +55,8 @@
     .dot.running { background:var(--ok); animation:pulse 1.4s infinite; }
     @keyframes pulse { 0% { box-shadow:0 0 0 0 rgba(110,231,183,.35);} 70% { box-shadow:0 0 0 10px rgba(110,231,183,0);} 100% { box-shadow:0 0 0 0 rgba(110,231,183,0);} }
     .status-actions { display:flex; align-items:center; gap:8px; }
-    .compact-btn { font-size:13px; min-height:38px; padding:8px 10px; border-radius:12px; }
+    .compact-btn { font-size:13px; min-height:38px; padding:8px 10px; border-radius:12px; white-space:nowrap; }
+    .compact-btn.icon-only { min-width:38px; padding:8px; }
     .compact-btn.active { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
     .bottom-settings { display:none; border:1px solid var(--line); border-radius:16px; padding:12px; background:rgba(255,255,255,.02); }
     .bottom-settings.show { display:block; }
@@ -101,6 +102,7 @@
       <div id="readingWrap" class="reading-wrap">
         <div id="sentenceList" class="sentence-list"></div>
       </div>
+      <div class="small">待機中は入力、再生中は現在の文をハイライト表示します。停止または再生完了で入力欄に戻ります。</div>
     </div>
 
     <div class="card">
@@ -116,8 +118,9 @@
         <div class="status-fixed"><span id="statusDot" class="dot"></span><span id="statusText">待機中</span></div>
         <div class="status-actions">
           <button id="repeatToggleBtn" class="compact-btn" aria-pressed="false" title="同じ文をリピート">🔁</button>
-          <button id="toggleSettingsBtn" class="compact-btn">設定</button>
+          <button id="autoplayToggleBtn" class="compact-btn" aria-pressed="true" title="次の文を自動再生">⏭️</button>
           <button id="saveBtn" class="compact-btn">保存</button>
+          <button id="toggleSettingsBtn" class="compact-btn icon-only" aria-label="設定" title="設定">⚙️</button>
         </div>
       </div>
       <div id="bottomSettings" class="bottom-settings">

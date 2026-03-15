@@ -17,14 +17,29 @@ const nextBtn = document.getElementById('nextBtn');
 const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
 const bottomSettingsEl = document.getElementById('bottomSettings');
 const repeatToggleBtn = document.getElementById('repeatToggleBtn');
+const autoplayToggleBtn = document.getElementById('autoplayToggleBtn');
 
 let currentRecordId = null;
 let playbackState = 'idle';
 let sentenceQueue = [];
 let currentSentenceIndex = 0;
 const STORAGE_REPEAT_SENTENCE_KEY = 'tts_listener_repeat_sentence';
+const STORAGE_AUTOPLAY_KEY = 'tts_listener_autoplay';
 let stopReason = null; // null | 'jump' | 'stop'
 let pendingJumpIndex = null;
+let pausedAtSentenceEnd = false;
+let pausedSentenceNeedsReplay = false;
+let manualPauseActive = false;
+
+function ensureDefaultSettings() {
+  if (localStorage.getItem(STORAGE_REPEAT_SENTENCE_KEY) === null) {
+    localStorage.setItem(STORAGE_REPEAT_SENTENCE_KEY, '0');
+  }
+  if (localStorage.getItem(STORAGE_AUTOPLAY_KEY) === null) {
+    localStorage.setItem(STORAGE_AUTOPLAY_KEY, '1');
+  }
+}
+
 
 function splitSentences(text) {
   return text.replace(/\r\n/g, '\n').split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
@@ -74,10 +89,43 @@ function updateRepeatButton() {
   const enabled = localStorage.getItem(STORAGE_REPEAT_SENTENCE_KEY) === '1';
   repeatToggleBtn.classList.toggle('active', enabled);
   repeatToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-  repeatToggleBtn.textContent = enabled ? '🔁 ON' : '🔁';
+  repeatToggleBtn.textContent = '🔁';
 }
 function isRepeatEnabled() {
   return localStorage.getItem(STORAGE_REPEAT_SENTENCE_KEY) === '1';
+}
+function updateAutoplayButton() {
+  const enabled = localStorage.getItem(STORAGE_AUTOPLAY_KEY) !== '0';
+  autoplayToggleBtn.classList.toggle('active', enabled);
+  autoplayToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  autoplayToggleBtn.textContent = '⏭️';
+}
+function isAutoplayEnabled() {
+  return localStorage.getItem(STORAGE_AUTOPLAY_KEY) !== '0';
+}
+function continueFromSentenceEndPause() {
+  if (pausedSentenceNeedsReplay || isRepeatEnabled()) {
+    playbackState = 'playing';
+    pausedAtSentenceEnd = false;
+    pausedSentenceNeedsReplay = false;
+    renderSentenceList(currentSentenceIndex);
+    showReadingMode();
+    updateToggleButton();
+    startCurrentSentencePlayback();
+    return;
+  }
+  if (currentSentenceIndex + 1 >= sentenceQueue.length) {
+    finishPlayback('再生完了');
+    return;
+  }
+  currentSentenceIndex += 1;
+  playbackState = 'playing';
+  pausedAtSentenceEnd = false;
+  pausedSentenceNeedsReplay = false;
+  renderSentenceList(currentSentenceIndex);
+  showReadingMode();
+  updateToggleButton();
+  startCurrentSentencePlayback();
 }
 function updateRateLabel() {
   const value = Number(rateRangeEl.value).toFixed(1);
@@ -222,6 +270,9 @@ function finishPlayback(message) {
   currentSentenceIndex = 0;
   stopReason = null;
   pendingJumpIndex = null;
+  pausedAtSentenceEnd = false;
+  pausedSentenceNeedsReplay = false;
+  manualPauseActive = false;
   showEditorMode();
   setStatus('idle', message);
   updateToggleButton();
@@ -237,6 +288,9 @@ function startCurrentSentencePlayback() {
     voiceName: voiceSelectEl.value,
     onStart: (voice) => {
       playbackState = 'playing';
+      manualPauseActive = false;
+      pausedAtSentenceEnd = false;
+      pausedSentenceNeedsReplay = false;
       setStatus('playing', voice ? `${voice.name} で再生中` : '再生中');
       if (voice) saveVoice(voice.name);
       updateToggleButton();
@@ -246,6 +300,15 @@ function startCurrentSentencePlayback() {
       if (stopReason === 'stop') return;
       if (playbackState === 'paused') return;
       if (playbackState !== 'playing') return;
+      if (!isAutoplayEnabled()) {
+        playbackState = 'paused';
+        manualPauseActive = false;
+        pausedAtSentenceEnd = true;
+        pausedSentenceNeedsReplay = false;
+        setStatus('paused', '文末で停止中');
+        updateToggleButton();
+        return;
+      }
       if (isRepeatEnabled()) {
         startCurrentSentencePlayback();
         return;
@@ -265,6 +328,7 @@ function startCurrentSentencePlayback() {
         if (typeof target === 'number') {
           currentSentenceIndex = target;
           playbackState = 'playing';
+          manualPauseActive = false;
           renderSentenceList(currentSentenceIndex);
           showReadingMode();
           updateToggleButton();
@@ -292,7 +356,15 @@ function jumpToSentence(nextIndex) {
     currentSentenceIndex = nextIndex;
     renderSentenceList(currentSentenceIndex);
     showReadingMode();
-    setStatus('paused', '一時停止中');
+    if (manualPauseActive) {
+      pausedAtSentenceEnd = false;
+      pausedSentenceNeedsReplay = true;
+      setStatus('paused', '一時停止中');
+    } else {
+      pausedAtSentenceEnd = true;
+      pausedSentenceNeedsReplay = true;
+      setStatus('paused', '文末で停止中');
+    }
     updateToggleButton();
     return;
   }
@@ -341,19 +413,43 @@ repeatToggleBtn.addEventListener('click', () => {
   localStorage.setItem(STORAGE_REPEAT_SENTENCE_KEY, next ? '1' : '0');
   updateRepeatButton();
 });
+autoplayToggleBtn.addEventListener('click', () => {
+  const next = !isAutoplayEnabled();
+  localStorage.setItem(STORAGE_AUTOPLAY_KEY, next ? '1' : '0');
+  updateAutoplayButton();
+});
 saveBtn.addEventListener('click', saveCurrentTextManually);
 
 togglePlayBtn.addEventListener('click', () => {
   if (playbackState === 'paused') {
-    speechController.resume();
-    playbackState = 'playing';
-    setStatus('playing', '再生再開');
-    updateToggleButton();
+    if (pausedAtSentenceEnd) {
+      continueFromSentenceEndPause();
+    } else if (manualPauseActive) {
+      if (pausedSentenceNeedsReplay) {
+        pendingJumpIndex = currentSentenceIndex;
+        stopReason = 'jump';
+        playbackState = 'playing';
+        speechController.stop();
+      } else {
+        speechController.resume();
+        playbackState = 'playing';
+        setStatus('playing', '再生再開');
+        updateToggleButton();
+      }
+    } else {
+      speechController.resume();
+      playbackState = 'playing';
+      setStatus('playing', '再生再開');
+      updateToggleButton();
+    }
     return;
   }
   if (playbackState === 'playing') {
     speechController.pause();
     playbackState = 'paused';
+    manualPauseActive = true;
+    pausedAtSentenceEnd = false;
+    pausedSentenceNeedsReplay = false;
     setStatus('paused', '一時停止中');
     updateToggleButton();
     return;
@@ -368,6 +464,9 @@ stopBtn.addEventListener('click', () => {
   }
   stopReason = 'stop';
   pendingJumpIndex = null;
+  pausedAtSentenceEnd = false;
+  pausedSentenceNeedsReplay = false;
+  manualPauseActive = false;
   playbackState = 'idle';
   speechController.stop();
   sentenceQueue = [];
@@ -386,13 +485,16 @@ nextBtn.addEventListener('click', () => {
 toggleSettingsBtn.addEventListener('click', () => {
   const show = !bottomSettingsEl.classList.contains('show');
   bottomSettingsEl.classList.toggle('show', show);
-  toggleSettingsBtn.textContent = show ? '閉じる' : '設定';
+  toggleSettingsBtn.classList.toggle('active', show);
+  toggleSettingsBtn.textContent = '⚙️';
 });
 
 function loadSaved() {
+  ensureDefaultSettings();
   textEl.value = getCurrentText();
   rateRangeEl.value = getSavedRate();
   updateRepeatButton();
+  updateAutoplayButton();
   updateRateLabel();
   renderSavedList();
   playbackState = 'idle';
@@ -400,10 +502,12 @@ function loadSaved() {
   currentSentenceIndex = 0;
   stopReason = null;
   pendingJumpIndex = null;
+  pausedAtSentenceEnd = false;
+  pausedSentenceNeedsReplay = false;
+  manualPauseActive = false;
   showEditorMode();
   setStatus('idle');
   updateToggleButton();
-  updateRepeatButton();
 }
 loadSaved();
 populateVoices();
