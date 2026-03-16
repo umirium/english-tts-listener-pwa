@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#0b0f14" />
   <title>English TTS Listener</title>
   <link rel="manifest" href="manifest.json" />
@@ -28,8 +28,11 @@
     textarea:focus { border-color:#4b6a87; box-shadow:0 0 0 3px rgba(124,196,255,.12); }
     .reading-wrap { display:none; min-height:62vh; border:1px solid var(--line); border-radius:16px; background:#0f141b; padding:14px; overflow:auto; }
     .sentence-list { display:grid; gap:10px; }
-    .sentence-item { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:rgba(255,255,255,.02); transition:background-color .15s ease,border-color .15s ease,transform .15s ease; line-height:1.8; font-size:19px; word-break:break-word; }
+    button { touch-action: manipulation; }
+.sentence-item { touch-action: manipulation;
+ border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:rgba(255,255,255,.02); transition:background-color .15s ease,border-color .15s ease,transform .15s ease; line-height:1.8; font-size:19px; word-break:break-word; }
     .sentence-item.active { background:var(--highlight-bg); border-color:var(--highlight); color:#fff; box-shadow:0 0 0 1px rgba(255,79,163,.25) inset; transform:translateY(-1px); }
+    .sentence-item.selected { outline:2px solid rgba(124,196,255,.75); outline-offset:1px; }
     .sentence-index { display:block; color:var(--muted); font-size:12px; margin-bottom:6px; }
     .saved-list { display:grid; gap:12px; }
     .saved-item { border:1px solid var(--line); border-radius:18px; padding:14px; background:linear-gradient(180deg, #131b24, #10161e); }
@@ -69,9 +72,12 @@
     .bottom-top { display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr; gap:10px; }
     @media (max-width:640px) {
       .wrap { padding:12px; padding-bottom:calc(210px + env(safe-area-inset-bottom)); }
-      textarea, .reading-wrap { min-height:64vh; }
+      textarea { min-height:64vh; }
+      .reading-wrap { height:64vh; max-height:64vh; }
       textarea { font-size:21px; line-height:1.75; padding:18px 16px; }
-      .sentence-item { font-size:20px; line-height:1.8; }
+      button { touch-action: manipulation; }
+.sentence-item { touch-action: manipulation;
+ font-size:20px; line-height:1.8; }
       h1 { font-size:24px; }
       .saved-meta, .settings-grid { grid-template-columns:1fr; }
       .bottom-status-row { align-items:center; flex-direction:row; }
@@ -102,6 +108,7 @@
       <div id="readingWrap" class="reading-wrap">
         <div id="sentenceList" class="sentence-list"></div>
       </div>
+      
     </div>
 
     <div class="card">
@@ -116,6 +123,7 @@
       <div class="bottom-status-row">
         <div class="status-fixed"><span id="statusDot" class="dot"></span><span id="statusText">待機中</span></div>
         <div class="status-actions">
+          <button id="randomToggleBtn" class="compact-btn" aria-pressed="false" title="ランダム再生">🔀</button>
           <button id="repeatToggleBtn" class="compact-btn" aria-pressed="false" title="同じ文をリピート">🔁</button>
           <button id="autoplayToggleBtn" class="compact-btn" aria-pressed="true" title="次の文を自動再生">⏭️</button>
           <button id="saveBtn" class="compact-btn">保存</button>

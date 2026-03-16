@@ -1,4 +1,4 @@
-const CACHE_NAME = 'english-tts-listener-v3-3';
+const CACHE_NAME = 'english-tts-listener-v4-1';
 const ASSETS = ['./','./index.html','./app.js','./storage.js','./speech.js','./manifest.json','./icon-192.png','./icon-512.png'];
 self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener('activate', event => {
