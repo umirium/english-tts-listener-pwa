@@ -61,8 +61,8 @@
     .compact-btn { font-size:13px; min-height:38px; padding:8px 10px; border-radius:12px; white-space:nowrap; }
     .compact-btn.icon-only { min-width:38px; padding:8px; }
     .compact-btn.active { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
-    .bottom-settings { display:none; border:1px solid var(--line); border-radius:16px; padding:12px; background:rgba(255,255,255,.02); }
-    .bottom-settings.show { display:block; }
+    .bottom-settings { display:block; border:1px solid var(--line); border-radius:16px; padding:0 12px; background:rgba(255,255,255,.02); overflow:hidden; max-height:0; opacity:0; transform:translateY(-6px); transition:max-height .28s ease, opacity .22s ease, transform .22s ease, padding-top .22s ease, padding-bottom .22s ease; pointer-events:none; }
+    .bottom-settings.show { max-height:260px; opacity:1; transform:translateY(0); padding-top:12px; padding-bottom:12px; pointer-events:auto; }
     .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .small-field label { font-size:12px; margin-bottom:6px; }
     .small-field select { padding:10px; font-size:14px; }
@@ -95,7 +95,7 @@
         <div class="app-icon">🔊</div>
         <div>
           <h1>English TTS Listener</h1>
-          <p class="sub">英字テキストを読み上げて、英語リスニング練習に使うアプリです。</p>
+          <p class="sub"></p>
         </div>
       </div>
     </div>

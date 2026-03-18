@@ -61,6 +61,11 @@ function setStatus(mode, message = null) {
 }
 function showEditorMode() { editorWrapEl.style.display = 'block'; readingWrapEl.style.display = 'none'; }
 function showReadingMode() { editorWrapEl.style.display = 'none'; readingWrapEl.style.display = 'block'; }
+function closeSettingsPanel() {
+  bottomSettingsEl.classList.remove('show');
+  toggleSettingsBtn.classList.remove('active');
+  toggleSettingsBtn.textContent = '⚙️';
+}
 
 function scrollSelectedSentenceIntoView() {
   const target =
@@ -240,7 +245,7 @@ function formatDate(timestamp) {
   return `${y}/${m}/${day} ${hh}:${mm}`;
 }
 function populateVoices() {
-  const savedVoice = getSavedVoice();
+  const savedVoice = null;
   const voices = speechController.getEnglishVoices().length ? speechController.getEnglishVoices() : speechController.getVoices();
   voiceSelectEl.innerHTML = '';
   voices.forEach(voice => {
@@ -293,8 +298,7 @@ function renderSavedList() {
     meta.className = 'saved-meta';
     const metaItems = [
       ['再生回数', String(record.playCount || 0)],
-      ['前回速度', record.lastRate ? `${Number(record.lastRate).toFixed(1)}x` : '-'],
-      ['前回音声', record.lastVoiceName || '-']
+      ['前回速度', record.lastRate ? `${Number(record.lastRate).toFixed(1)}x` : '-']
     ];
     for (const [k, v] of metaItems) {
       const box = document.createElement('div');
@@ -347,13 +351,13 @@ function saveCurrentTextManually() {
     renderSavedList();
     return;
   }
-  const record = createRecord(rawText, { lastRate: Number(rateRangeEl.value), lastVoiceName: voiceSelectEl.value });
+  const record = createRecord(rawText, { lastRate: Number(rateRangeEl.value) });
   currentRecordId = record.id;
   renderSavedList();
   setStatus('idle', 'テキストを保存しました');
 }
 function ensureCurrentRecord() {
-  const result = ensureRecordForText(textEl.value, { lastRate: Number(rateRangeEl.value), lastVoiceName: voiceSelectEl.value });
+  const result = ensureRecordForText(textEl.value, { lastRate: Number(rateRangeEl.value) });
   if (!result || !result.record) return null;
   currentRecordId = result.record.id;
   return result;
@@ -393,8 +397,8 @@ function startCurrentSentencePlayback() {
       manualPauseActive = false;
       pausedAtSentenceEnd = false;
       pausedSentenceNeedsReplay = false;
-      setStatus('playing', voice ? `${voice.name} で再生中` : '再生中');
-      if (voice) saveVoice(voice.name);
+      setStatus('playing', '再生中');
+      if (voice) 
       updateToggleButton();
     },
     onEnd: () => {
@@ -501,6 +505,7 @@ function jumpToSentence(nextIndex) {
   startCurrentSentencePlayback();
 }
 function selectSentenceByTap(index) {
+  closeSettingsPanel();
   selectedSentenceIndex = index;
   renderSentenceList(-1);
   jumpToSentence(index);
@@ -560,7 +565,7 @@ textEl.addEventListener('input', () => {
 });
 
 rateRangeEl.addEventListener('input', updateRateLabel);
-voiceSelectEl.addEventListener('change', () => saveVoice(voiceSelectEl.value));
+
 
 randomToggleBtn.addEventListener('click', () => {
   const next = !isRandomEnabled();
@@ -581,6 +586,7 @@ autoplayToggleBtn.addEventListener('click', () => {
 saveBtn.addEventListener('click', saveCurrentTextManually);
 
 togglePlayBtn.addEventListener('click', () => {
+  closeSettingsPanel();
   if (playbackState === 'paused') {
     if (pausedAtSentenceEnd) {
       continueFromSentenceEndPause();
@@ -641,15 +647,21 @@ stopBtn.addEventListener('click', () => {
   updateAutoplayButton();
 });
 prevBtn.addEventListener('click', () => {
+  closeSettingsPanel();
   if (currentSentenceIndex > 0) jumpToSentence(currentSentenceIndex - 1);
 });
 nextBtn.addEventListener('click', () => {
+  closeSettingsPanel();
   if (currentSentenceIndex < sentenceQueue.length - 1) jumpToSentence(currentSentenceIndex + 1);
 });
 toggleSettingsBtn.addEventListener('click', () => {
   const show = !bottomSettingsEl.classList.contains('show');
-  bottomSettingsEl.classList.toggle('show', show);
-  toggleSettingsBtn.classList.toggle('active', show);
+  if (show) {
+    bottomSettingsEl.classList.add('show');
+    toggleSettingsBtn.classList.add('active');
+  } else {
+    closeSettingsPanel();
+  }
   toggleSettingsBtn.textContent = '⚙️';
 });
 
