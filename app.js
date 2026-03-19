@@ -16,6 +16,7 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
 const bottomSettingsEl = document.getElementById('bottomSettings');
+const settingsOverlayEl = document.getElementById('settingsOverlay');
 const randomToggleBtn = document.getElementById('randomToggleBtn');
 const repeatToggleBtn = document.getElementById('repeatToggleBtn');
 const autoplayToggleBtn = document.getElementById('autoplayToggleBtn');
@@ -34,6 +35,8 @@ let pausedSentenceNeedsReplay = false;
 let manualPauseActive = false;
 let randomPool = [];
 let selectedSentenceIndex = -1;
+let pausedSettingsChanged = false;
+let pausedUtteranceCleared = false;
 
 function ensureDefaultSettings() {
   if (localStorage.getItem(STORAGE_RANDOM_KEY) === null) {
@@ -61,8 +64,15 @@ function setStatus(mode, message = null) {
 }
 function showEditorMode() { editorWrapEl.style.display = 'block'; readingWrapEl.style.display = 'none'; }
 function showReadingMode() { editorWrapEl.style.display = 'none'; readingWrapEl.style.display = 'block'; }
+function openSettingsPanel() {
+  bottomSettingsEl.classList.add('show');
+  if (settingsOverlayEl) settingsOverlayEl.classList.add('show');
+  toggleSettingsBtn.classList.add('active');
+  toggleSettingsBtn.textContent = '⚙️';
+}
 function closeSettingsPanel() {
   bottomSettingsEl.classList.remove('show');
+  if (settingsOverlayEl) settingsOverlayEl.classList.remove('show');
   toggleSettingsBtn.classList.remove('active');
   toggleSettingsBtn.textContent = '⚙️';
 }
@@ -140,7 +150,7 @@ function renderSentenceList(activeIndex = -1) {
   });
 }
 function updateControlLock() {
-  const locked = playbackState === 'playing' || playbackState === 'paused';
+  const locked = playbackState === 'playing';
   voiceSelectEl.disabled = locked;
   rateRangeEl.disabled = locked;
   prevBtn.disabled = !sentenceQueue.length || currentSentenceIndex <= 0;
@@ -197,6 +207,32 @@ function getNextRandomIndex() {
   randomPool.splice(pick, 1);
   return idx;
 }
+function clearPausedUtterance() {
+  if (playbackState === 'paused' && !pausedUtteranceCleared) {
+    stopReason = 'hold';
+    pausedUtteranceCleared = true;
+    speechController.stop();
+  }
+}
+
+function performPendingJump() {
+  stopReason = null;
+  const target = pendingJumpIndex;
+  pendingJumpIndex = null;
+  if (typeof target === 'number') {
+    currentSentenceIndex = target;
+    selectedSentenceIndex = target;
+    playbackState = 'playing';
+    manualPauseActive = false;
+    pausedAtSentenceEnd = false;
+    pausedSentenceNeedsReplay = false;
+    renderSentenceList(currentSentenceIndex);
+    showReadingMode();
+    updateToggleButton();
+    setTimeout(() => startCurrentSentencePlayback(), 0);
+  }
+}
+
 function continueFromSentenceEndPause() {
   if (pausedSentenceNeedsReplay || isRepeatEnabled()) {
     playbackState = 'playing';
@@ -373,12 +409,16 @@ function finishPlayback(message) {
   pausedAtSentenceEnd = false;
   pausedSentenceNeedsReplay = false;
   manualPauseActive = false;
+  pausedSettingsChanged = false;
+  pausedUtteranceCleared = false;
   showEditorMode();
   setStatus('idle', message);
   updateToggleButton();
   updateRepeatButton();
 }
 function startCurrentSentencePlayback() {
+  pausedSettingsChanged = false;
+  pausedUtteranceCleared = false;
   selectedSentenceIndex = currentSentenceIndex;
   renderSentenceList(currentSentenceIndex);
   showReadingMode();
@@ -388,76 +428,100 @@ function startCurrentSentencePlayback() {
     });
   });
   updateToggleButton();
-  speechController.speak({
-    text: sentenceQueue[currentSentenceIndex],
-    rate: Number(rateRangeEl.value),
-    voiceName: voiceSelectEl.value,
-    onStart: (voice) => {
-      playbackState = 'playing';
-      manualPauseActive = false;
-      pausedAtSentenceEnd = false;
-      pausedSentenceNeedsReplay = false;
-      setStatus('playing', '再生中');
-      if (voice) 
-      updateToggleButton();
-    },
-    onEnd: () => {
-      if (stopReason === 'jump') return;
-      if (stopReason === 'stop') return;
-      if (playbackState === 'paused') return;
-      if (playbackState !== 'playing') return;
-      if (!isAutoplayEnabled()) {
-        playbackState = 'paused';
+
+  let didStart = false;
+  let retried = false;
+
+  const launchSpeech = () => {
+    speechController.speak({
+      text: sentenceQueue[currentSentenceIndex],
+      rate: Number(rateRangeEl.value),
+      voiceName: voiceSelectEl.value,
+      onStart: () => {
+        didStart = true;
+        playbackState = 'playing';
         manualPauseActive = false;
-        pausedAtSentenceEnd = true;
+        pausedAtSentenceEnd = false;
         pausedSentenceNeedsReplay = false;
-        setStatus('paused', '文末で停止中');
+        pausedUtteranceCleared = false;
+        setStatus('playing', '再生中');
         updateToggleButton();
-        return;
-      }
-      if (isRepeatEnabled()) {
-        startCurrentSentencePlayback();
-        return;
-      }
-      const nextIndex = isRandomEnabled()
-        ? getNextRandomIndex()
-        : (currentSentenceIndex + 1 < sentenceQueue.length ? currentSentenceIndex + 1 : null);
-      if (nextIndex === null || nextIndex === undefined) {
-        finishPlayback('再生完了');
-        return;
-      }
-      currentSentenceIndex = nextIndex;
-      selectedSentenceIndex = nextIndex;
-      startCurrentSentencePlayback();
-    },
-    onError: () => {
-      if (stopReason === 'jump') {
-        stopReason = null;
-        const target = pendingJumpIndex;
-        pendingJumpIndex = null;
-        if (typeof target === 'number') {
-          currentSentenceIndex = target;
-          selectedSentenceIndex = target;
-          playbackState = 'playing';
-          manualPauseActive = false;
-          renderSentenceList(currentSentenceIndex);
-          showReadingMode();
-          updateToggleButton();
-          setTimeout(() => startCurrentSentencePlayback(), 0);
+      },
+      onEnd: () => {
+        if (stopReason === 'jump') {
+          performPendingJump();
+          return;
         }
-        return;
+        if (stopReason === 'hold') {
+          stopReason = null;
+          playbackState = 'paused';
+          updateToggleButton();
+          return;
+        }
+        if (stopReason === 'stop') return;
+        if (playbackState === 'paused') return;
+        if (playbackState !== 'playing') return;
+        if (!isAutoplayEnabled()) {
+          playbackState = 'paused';
+          manualPauseActive = false;
+          pausedAtSentenceEnd = true;
+          pausedSentenceNeedsReplay = false;
+          pausedUtteranceCleared = true;
+          setStatus('paused', '文末で停止中');
+          updateToggleButton();
+          return;
+        }
+        if (isRepeatEnabled()) {
+          startCurrentSentencePlayback();
+          return;
+        }
+        const nextIndex = isRandomEnabled()
+          ? getNextRandomIndex()
+          : (currentSentenceIndex + 1 < sentenceQueue.length ? currentSentenceIndex + 1 : null);
+        if (nextIndex === null || nextIndex === undefined) {
+          finishPlayback('再生完了');
+          return;
+        }
+        currentSentenceIndex = nextIndex;
+        selectedSentenceIndex = nextIndex;
+        startCurrentSentencePlayback();
+      },
+      onError: () => {
+        if (!didStart && !retried && playbackState === 'playing') {
+          retried = true;
+        }
+        if (stopReason === 'jump') {
+          performPendingJump();
+          return;
+        }
+        if (stopReason === 'hold') {
+          stopReason = null;
+          playbackState = 'paused';
+          updateToggleButton();
+          return;
+        }
+        if (stopReason === 'stop') {
+          stopReason = null;
+          pendingJumpIndex = null;
+          playbackState = 'idle';
+          showEditorMode();
+          updateToggleButton();
+          return;
+        }
+        finishPlayback('再生エラー');
       }
-      if (stopReason === 'stop') {
-        stopReason = null;
-        pendingJumpIndex = null;
-        playbackState = 'idle';
-        showEditorMode();
-        updateToggleButton();
-        return;
+    });
+
+    setTimeout(() => {
+      if (!didStart && !retried && playbackState === 'playing' && stopReason === null) {
+        retried = true;
+        speechController.stop();
+        setTimeout(() => launchSpeech(), 60);
       }
-      finishPlayback('再生エラー');
-    }
-  });
+    }, 350);
+  };
+
+  launchSpeech();
 }
 function jumpToSentence(nextIndex) {
   if (!sentenceQueue.length) return;
@@ -473,10 +537,12 @@ function jumpToSentence(nextIndex) {
     if (manualPauseActive) {
       pausedAtSentenceEnd = false;
       pausedSentenceNeedsReplay = true;
+      clearPausedUtterance();
       setStatus('paused', '一時停止中');
     } else {
       pausedAtSentenceEnd = true;
       pausedSentenceNeedsReplay = true;
+      pausedUtteranceCleared = true;
       setStatus('paused', '文末で停止中');
     }
     updateToggleButton();
@@ -505,7 +571,6 @@ function jumpToSentence(nextIndex) {
   startCurrentSentencePlayback();
 }
 function selectSentenceByTap(index) {
-  closeSettingsPanel();
   selectedSentenceIndex = index;
   renderSentenceList(-1);
   jumpToSentence(index);
@@ -564,7 +629,15 @@ textEl.addEventListener('input', () => {
   currentRecordId = null;
 });
 
-rateRangeEl.addEventListener('input', updateRateLabel);
+rateRangeEl.addEventListener('input', () => {
+  updateRateLabel();
+  if (playbackState === 'paused') {
+    pausedSettingsChanged = true;
+    pausedSentenceNeedsReplay = true;
+    if (manualPauseActive) clearPausedUtterance();
+    renderSentenceList(currentSentenceIndex);
+  }
+});
 
 
 randomToggleBtn.addEventListener('click', () => {
@@ -583,19 +656,31 @@ autoplayToggleBtn.addEventListener('click', () => {
   localStorage.setItem(STORAGE_AUTOPLAY_KEY, next ? '1' : '0');
   updateAutoplayButton();
 });
+voiceSelectEl.addEventListener('change', () => {
+  if (playbackState === 'paused') {
+    pausedSettingsChanged = true;
+    pausedSentenceNeedsReplay = true;
+    if (manualPauseActive) clearPausedUtterance();
+    renderSentenceList(currentSentenceIndex);
+  }
+});
 saveBtn.addEventListener('click', saveCurrentTextManually);
 
 togglePlayBtn.addEventListener('click', () => {
-  closeSettingsPanel();
   if (playbackState === 'paused') {
     if (pausedAtSentenceEnd) {
       continueFromSentenceEndPause();
     } else if (manualPauseActive) {
-      if (pausedSentenceNeedsReplay) {
-        pendingJumpIndex = currentSentenceIndex;
-        stopReason = 'jump';
+      if (pausedSentenceNeedsReplay || pausedSettingsChanged) {
         playbackState = 'playing';
-        speechController.stop();
+        stopReason = null;
+        pausedAtSentenceEnd = false;
+        manualPauseActive = false;
+        pausedSentenceNeedsReplay = false;
+        pausedSettingsChanged = false;
+        showReadingMode();
+        updateToggleButton();
+        startCurrentSentencePlayback();
       } else {
         speechController.resume();
         playbackState = 'playing';
@@ -616,6 +701,7 @@ togglePlayBtn.addEventListener('click', () => {
     manualPauseActive = true;
     pausedAtSentenceEnd = false;
     pausedSentenceNeedsReplay = false;
+    pausedUtteranceCleared = false;
     setStatus('paused', '一時停止中');
     updateToggleButton();
     return;
@@ -633,6 +719,8 @@ stopBtn.addEventListener('click', () => {
   pausedAtSentenceEnd = false;
   pausedSentenceNeedsReplay = false;
   manualPauseActive = false;
+  pausedSettingsChanged = false;
+  pausedUtteranceCleared = false;
   playbackState = 'idle';
   speechController.stop();
   sentenceQueue = [];
@@ -647,22 +735,17 @@ stopBtn.addEventListener('click', () => {
   updateAutoplayButton();
 });
 prevBtn.addEventListener('click', () => {
-  closeSettingsPanel();
   if (currentSentenceIndex > 0) jumpToSentence(currentSentenceIndex - 1);
 });
 nextBtn.addEventListener('click', () => {
-  closeSettingsPanel();
   if (currentSentenceIndex < sentenceQueue.length - 1) jumpToSentence(currentSentenceIndex + 1);
 });
+settingsOverlayEl.addEventListener('click',()=>closeSettingsPanel());
+
 toggleSettingsBtn.addEventListener('click', () => {
   const show = !bottomSettingsEl.classList.contains('show');
-  if (show) {
-    bottomSettingsEl.classList.add('show');
-    toggleSettingsBtn.classList.add('active');
-  } else {
-    closeSettingsPanel();
-  }
-  toggleSettingsBtn.textContent = '⚙️';
+  if (show) openSettingsPanel();
+  else closeSettingsPanel();
 });
 
 function loadSaved() {
@@ -684,6 +767,8 @@ function loadSaved() {
   pausedAtSentenceEnd = false;
   pausedSentenceNeedsReplay = false;
   manualPauseActive = false;
+  pausedSettingsChanged = false;
+  pausedUtteranceCleared = false;
   showEditorMode();
   setStatus('idle');
   updateToggleButton();

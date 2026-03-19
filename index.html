@@ -50,7 +50,9 @@
     button { appearance:none; border:1px solid var(--line); background:linear-gradient(180deg, #17202a, #121922); color:var(--text); border-radius:16px; padding:14px 12px; font-size:16px; font-weight:800; cursor:pointer; min-height:52px; }
     button.primary { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
     button:disabled { opacity:.45; cursor:default; }
-    .bottom-controls { position:fixed; left:0; right:0; bottom:0; z-index:30; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(8,12,17,.95); backdrop-filter:blur(10px); border-top:1px solid var(--line); }
+    .settings-overlay { position:fixed; inset:0; z-index:29; background:rgba(0,0,0,0.01); opacity:0; pointer-events:none; }
+    .settings-overlay.show { opacity:1; pointer-events:auto; }
+.bottom-controls { position:fixed; left:0; right:0; bottom:0; z-index:30; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(8,12,17,.95); backdrop-filter:blur(10px); border-top:1px solid var(--line); }
     .bottom-inner { max-width:860px; margin:0 auto; display:grid; gap:10px; }
     .bottom-status-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .status-fixed { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.02); color:var(--muted); font-size:13px; font-weight:700; }
@@ -118,7 +120,8 @@
     </div>
   </div>
 
-  <div class="bottom-controls">
+  <div id="settingsOverlay" class="settings-overlay"></div>
+<div class="bottom-controls">
     <div class="bottom-inner">
       <div class="bottom-status-row">
         <div class="status-fixed"><span id="statusDot" class="dot"></span><span id="statusText">待機中</span></div>
