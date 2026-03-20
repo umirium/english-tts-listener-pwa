@@ -738,7 +738,19 @@ prevBtn.addEventListener('click', () => {
   if (currentSentenceIndex > 0) jumpToSentence(currentSentenceIndex - 1);
 });
 nextBtn.addEventListener('click', () => {
-  if (currentSentenceIndex < sentenceQueue.length - 1) jumpToSentence(currentSentenceIndex + 1);
+  if (!sentenceQueue.length) return;
+
+  if (isRandomEnabled() && playbackState === 'paused' && pausedAtSentenceEnd) {
+    const nextRandomIndex = getNextRandomIndex();
+    if (nextRandomIndex !== null && nextRandomIndex !== undefined) {
+      jumpToSentence(nextRandomIndex);
+    }
+    return;
+  }
+
+  if (currentSentenceIndex < sentenceQueue.length - 1) {
+    jumpToSentence(currentSentenceIndex + 1);
+  }
 });
 settingsOverlayEl.addEventListener('click',()=>closeSettingsPanel());
 
