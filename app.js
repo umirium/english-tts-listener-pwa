@@ -332,7 +332,7 @@ function continueFromSentenceEndPause() {
   }
   const nextIndex = isRandomEnabled()
     ? getNextRandomPlaybackIndex()
-    : (currentSentenceIndex + 1 < sentenceQueue.length ? currentSentenceIndex + 1 : null);
+    : getNextSequentialIndex();
   if (nextIndex === null || nextIndex === undefined) {
     finishPlayback('再生完了');
     return;
@@ -366,7 +366,6 @@ function formatDate(timestamp) {
   return `${y}/${m}/${day} ${hh}:${mm}`;
 }
 function populateVoices() {
-  const savedVoice = null;
   const voices = speechController.getEnglishVoices().length ? speechController.getEnglishVoices() : speechController.getVoices();
   voiceSelectEl.innerHTML = '';
   voices.forEach(voice => {
