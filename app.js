@@ -26,7 +26,7 @@ let playbackState = 'idle';
 let sentenceQueue = [];
 let currentSentenceIndex = 0;
 const STORAGE_RANDOM_KEY = 'tts_listener_random';
-const STORAGE_REPEAT_SENTENCE_KEY = 'tts_listener_repeat_sentence';
+const STORAGE_REPEAT_MODE_KEY = 'tts_listener_repeat_mode';
 const STORAGE_AUTOPLAY_KEY = 'tts_listener_autoplay';
 let stopReason = null; // null | 'jump' | 'stop'
 let pendingJumpIndex = null;
@@ -37,13 +37,15 @@ let randomPool = [];
 let selectedSentenceIndex = -1;
 let pausedSettingsChanged = false;
 let pausedUtteranceCleared = false;
+let playHistory = [];
+let historyIndex = -1;
 
 function ensureDefaultSettings() {
   if (localStorage.getItem(STORAGE_RANDOM_KEY) === null) {
     localStorage.setItem(STORAGE_RANDOM_KEY, '0');
   }
-  if (localStorage.getItem(STORAGE_REPEAT_SENTENCE_KEY) === null) {
-    localStorage.setItem(STORAGE_REPEAT_SENTENCE_KEY, '0');
+  if (localStorage.getItem(STORAGE_REPEAT_MODE_KEY) === null) {
+    localStorage.setItem(STORAGE_REPEAT_MODE_KEY, 'off');
   }
   if (localStorage.getItem(STORAGE_AUTOPLAY_KEY) === null) {
     localStorage.setItem(STORAGE_AUTOPLAY_KEY, '1');
@@ -153,8 +155,14 @@ function updateControlLock() {
   const locked = playbackState === 'playing';
   voiceSelectEl.disabled = locked;
   rateRangeEl.disabled = locked;
-  prevBtn.disabled = !sentenceQueue.length || currentSentenceIndex <= 0;
-  nextBtn.disabled = !sentenceQueue.length || currentSentenceIndex >= sentenceQueue.length - 1;
+
+  if (isRandomEnabled()) {
+    prevBtn.disabled = !sentenceQueue.length || !canGoPrevHistory();
+    nextBtn.disabled = !sentenceQueue.length || (!isRepeatAllEnabled() && randomPool.length === 0 && !canGoNextHistory());
+  } else {
+    prevBtn.disabled = !sentenceQueue.length || currentSentenceIndex <= 0;
+    nextBtn.disabled = !sentenceQueue.length || currentSentenceIndex >= sentenceQueue.length - 1;
+  }
 }
 function updateToggleButton() {
   let label = '再生';
@@ -163,14 +171,23 @@ function updateToggleButton() {
   togglePlayBtn.textContent = label;
   updateControlLock();
 }
-function updateRepeatButton() {
-  const enabled = localStorage.getItem(STORAGE_REPEAT_SENTENCE_KEY) === '1';
-  repeatToggleBtn.classList.toggle('active', enabled);
-  repeatToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-  repeatToggleBtn.textContent = '🔁';
+function getRepeatMode() {
+  return localStorage.getItem(STORAGE_REPEAT_MODE_KEY) || 'off';
 }
-function isRepeatEnabled() {
-  return localStorage.getItem(STORAGE_REPEAT_SENTENCE_KEY) === '1';
+function setRepeatMode(mode) {
+  localStorage.setItem(STORAGE_REPEAT_MODE_KEY, mode);
+}
+function updateRepeatButton() {
+  const mode = getRepeatMode();
+  repeatToggleBtn.classList.toggle('active', mode !== 'off');
+  repeatToggleBtn.setAttribute('aria-pressed', mode !== 'off' ? 'true' : 'false');
+  repeatToggleBtn.textContent = mode === 'one' ? '🔁1' : '🔁';
+}
+function isRepeatAllEnabled() {
+  return getRepeatMode() === 'all';
+}
+function isRepeatOneEnabled() {
+  return getRepeatMode() === 'one';
 }
 function updateAutoplayButton() {
   const enabled = localStorage.getItem(STORAGE_AUTOPLAY_KEY) !== '0';
@@ -196,12 +213,13 @@ function resetRandomPool(excludeIndex = null) {
     if (i !== excludeIndex) randomPool.push(i);
   }
 }
+function removeFromRandomPool(index) {
+  const pos = randomPool.indexOf(index);
+  if (pos !== -1) randomPool.splice(pos, 1);
+}
 function getNextRandomIndex() {
   if (!sentenceQueue.length) return null;
-  if (randomPool.length === 0) {
-    resetRandomPool(currentSentenceIndex);
-  }
-  if (randomPool.length === 0) return currentSentenceIndex;
+  if (randomPool.length === 0) return null;
   const pick = Math.floor(Math.random() * randomPool.length);
   const idx = randomPool[pick];
   randomPool.splice(pick, 1);
@@ -233,8 +251,75 @@ function performPendingJump() {
   }
 }
 
+
+function initHistoryAtCurrent() {
+  playHistory = sentenceQueue.length ? [currentSentenceIndex] : [];
+  historyIndex = playHistory.length ? 0 : -1;
+}
+function recordHistory(index) {
+  if (index === null || index === undefined) return;
+  if (historyIndex >= 0 && playHistory[historyIndex] === index) return;
+  if (historyIndex < playHistory.length - 1) {
+    playHistory = playHistory.slice(0, historyIndex + 1);
+  }
+  playHistory.push(index);
+  historyIndex = playHistory.length - 1;
+}
+function canGoPrevHistory() {
+  return historyIndex > 0;
+}
+function canGoNextHistory() {
+  return historyIndex >= 0 && historyIndex < playHistory.length - 1;
+}
+function moveToPrevHistory() {
+  if (!canGoPrevHistory()) return null;
+  historyIndex -= 1;
+  return playHistory[historyIndex];
+}
+function moveToNextHistory() {
+  if (canGoNextHistory()) {
+    historyIndex += 1;
+    return playHistory[historyIndex];
+  }
+  const next = getNextRandomIndex();
+  if (next === null || next === undefined) return null;
+  recordHistory(next);
+  return next;
+}
+
+function getNextSequentialIndex() {
+  if (!sentenceQueue.length) return null;
+  if (currentSentenceIndex + 1 < sentenceQueue.length) return currentSentenceIndex + 1;
+  if (isRepeatAllEnabled()) return 0;
+  return null;
+}
+function getNextRandomPlaybackIndex() {
+  if (!sentenceQueue.length) return null;
+
+  if (canGoNextHistory()) {
+    historyIndex += 1;
+    return playHistory[historyIndex];
+  }
+
+  const next = getNextRandomIndex();
+  if (next === null || next === undefined) {
+    if (isRepeatAllEnabled()) {
+      resetRandomPool();
+      initHistoryAtCurrent();
+      const looped = getNextRandomIndex();
+      if (looped === null || looped === undefined) return null;
+      recordHistory(looped);
+      return looped;
+    }
+    return null;
+  }
+
+  recordHistory(next);
+  return next;
+}
+
 function continueFromSentenceEndPause() {
-  if (pausedSentenceNeedsReplay || isRepeatEnabled()) {
+  if (pausedSentenceNeedsReplay || isRepeatOneEnabled()) {
     playbackState = 'playing';
     pausedAtSentenceEnd = false;
     pausedSentenceNeedsReplay = false;
@@ -246,7 +331,7 @@ function continueFromSentenceEndPause() {
     return;
   }
   const nextIndex = isRandomEnabled()
-    ? getNextRandomIndex()
+    ? getNextRandomPlaybackIndex()
     : (currentSentenceIndex + 1 < sentenceQueue.length ? currentSentenceIndex + 1 : null);
   if (nextIndex === null || nextIndex === undefined) {
     finishPlayback('再生完了');
@@ -402,6 +487,8 @@ function finishPlayback(message) {
   playbackState = 'idle';
   sentenceQueue = [];
   randomPool = [];
+  playHistory = [];
+  historyIndex = -1;
   currentSentenceIndex = 0;
   selectedSentenceIndex = -1;
   stopReason = null;
@@ -420,6 +507,9 @@ function startCurrentSentencePlayback() {
   pausedSettingsChanged = false;
   pausedUtteranceCleared = false;
   selectedSentenceIndex = currentSentenceIndex;
+  if (isRandomEnabled()) {
+    recordHistory(currentSentenceIndex);
+  }
   renderSentenceList(currentSentenceIndex);
   showReadingMode();
   requestAnimationFrame(() => {
@@ -471,13 +561,13 @@ function startCurrentSentencePlayback() {
           updateToggleButton();
           return;
         }
-        if (isRepeatEnabled()) {
+        if (isRepeatOneEnabled()) {
           startCurrentSentencePlayback();
           return;
         }
         const nextIndex = isRandomEnabled()
-          ? getNextRandomIndex()
-          : (currentSentenceIndex + 1 < sentenceQueue.length ? currentSentenceIndex + 1 : null);
+          ? getNextRandomPlaybackIndex()
+          : getNextSequentialIndex();
         if (nextIndex === null || nextIndex === undefined) {
           finishPlayback('再生完了');
           return;
@@ -530,7 +620,7 @@ function jumpToSentence(nextIndex) {
 
   if (playbackState === 'paused') {
     currentSentenceIndex = nextIndex;
-    if (isRandomEnabled()) resetRandomPool(currentSentenceIndex);
+    if (isRandomEnabled()) removeFromRandomPool(nextIndex);
     renderSentenceList(currentSentenceIndex);
     showReadingMode();
     requestAnimationFrame(() => { requestAnimationFrame(() => { scrollSelectedSentenceIntoView(); }); });
@@ -550,7 +640,7 @@ function jumpToSentence(nextIndex) {
   }
 
   if (playbackState === 'playing') {
-    if (isRandomEnabled()) resetRandomPool(nextIndex);
+    if (isRandomEnabled()) removeFromRandomPool(nextIndex);
     pendingJumpIndex = nextIndex;
     stopReason = 'jump';
     playbackState = 'playing';
@@ -562,7 +652,7 @@ function jumpToSentence(nextIndex) {
   }
 
   currentSentenceIndex = nextIndex;
-  if (isRandomEnabled()) resetRandomPool(currentSentenceIndex);
+  if (isRandomEnabled()) removeFromRandomPool(nextIndex);
   showReadingMode();
   playbackState = 'playing';
   stopReason = null;
@@ -600,9 +690,19 @@ function startPlayback() {
   pausedSentenceNeedsReplay = false;
   manualPauseActive = false;
 
-  currentSentenceIndex = 0;
+  if (isRandomEnabled()) {
+    resetRandomPool(null);
+    const randomStart = getNextRandomIndex();
+    currentSentenceIndex = randomStart !== null ? randomStart : 0;
+    resetRandomPool(currentSentenceIndex);
+    initHistoryAtCurrent();
+  } else {
+    currentSentenceIndex = 0;
+    resetRandomPool(currentSentenceIndex);
+    playHistory = [];
+    historyIndex = -1;
+  }
   selectedSentenceIndex = currentSentenceIndex;
-  resetRandomPool(currentSentenceIndex);
 
   renderSentenceList(currentSentenceIndex);
   showReadingMode();
@@ -643,13 +743,23 @@ rateRangeEl.addEventListener('input', () => {
 randomToggleBtn.addEventListener('click', () => {
   const next = !isRandomEnabled();
   localStorage.setItem(STORAGE_RANDOM_KEY, next ? '1' : '0');
-  if (next && sentenceQueue.length) resetRandomPool(currentSentenceIndex);
+  if (next && sentenceQueue.length) {
+    resetRandomPool(currentSentenceIndex);
+    initHistoryAtCurrent();
+  }
+  if (!next) {
+    playHistory = [];
+    historyIndex = -1;
+  }
   updateRandomButton();
+  updateToggleButton();
 });
 repeatToggleBtn.addEventListener('click', () => {
-  const next = !isRepeatEnabled();
-  localStorage.setItem(STORAGE_REPEAT_SENTENCE_KEY, next ? '1' : '0');
+  const mode = getRepeatMode();
+  const nextMode = mode === 'off' ? 'all' : mode === 'all' ? 'one' : 'off';
+  setRepeatMode(nextMode);
   updateRepeatButton();
+  updateToggleButton();
 });
 autoplayToggleBtn.addEventListener('click', () => {
   const next = !isAutoplayEnabled();
@@ -725,6 +835,8 @@ stopBtn.addEventListener('click', () => {
   speechController.stop();
   sentenceQueue = [];
   randomPool = [];
+  playHistory = [];
+  historyIndex = -1;
   currentSentenceIndex = 0;
   selectedSentenceIndex = -1;
   showEditorMode();
@@ -735,21 +847,36 @@ stopBtn.addEventListener('click', () => {
   updateAutoplayButton();
 });
 prevBtn.addEventListener('click', () => {
-  if (currentSentenceIndex > 0) jumpToSentence(currentSentenceIndex - 1);
-});
-nextBtn.addEventListener('click', () => {
-  if (!sentenceQueue.length) return;
-
-  if (isRandomEnabled() && playbackState === 'paused' && pausedAtSentenceEnd) {
-    const nextRandomIndex = getNextRandomIndex();
-    if (nextRandomIndex !== null && nextRandomIndex !== undefined) {
-      jumpToSentence(nextRandomIndex);
+  if (isRandomEnabled()) {
+    const prevIndex = moveToPrevHistory();
+    if (prevIndex !== null && prevIndex !== undefined) {
+      jumpToSentence(prevIndex);
     }
     return;
   }
 
-  if (currentSentenceIndex < sentenceQueue.length - 1) {
-    jumpToSentence(currentSentenceIndex + 1);
+  const prevIndex = currentSentenceIndex > 0
+    ? currentSentenceIndex - 1
+    : (isRepeatAllEnabled() && sentenceQueue.length ? sentenceQueue.length - 1 : null);
+
+  if (prevIndex !== null && prevIndex !== undefined) {
+    jumpToSentence(prevIndex);
+  }
+});
+nextBtn.addEventListener('click', () => {
+  if (!sentenceQueue.length) return;
+
+  if (isRandomEnabled()) {
+    const nextIndex = getNextRandomPlaybackIndex();
+    if (nextIndex !== null && nextIndex !== undefined) {
+      jumpToSentence(nextIndex);
+    }
+    return;
+  }
+
+  const nextIndex = getNextSequentialIndex();
+  if (nextIndex !== null && nextIndex !== undefined) {
+    jumpToSentence(nextIndex);
   }
 });
 settingsOverlayEl.addEventListener('click',()=>closeSettingsPanel());
@@ -772,6 +899,8 @@ function loadSaved() {
   playbackState = 'idle';
   sentenceQueue = [];
   randomPool = [];
+  playHistory = [];
+  historyIndex = -1;
   currentSentenceIndex = 0;
   selectedSentenceIndex = -1;
   stopReason = null;
