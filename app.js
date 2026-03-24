@@ -919,3 +919,14 @@ speechController.waitForVoices(() => populateVoices());
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// iOS Safari がバックグラウンド時にページを破棄することがあるため、
+// 非表示になる直前にテキストを localStorage へ確実に保存する
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && textEl.value) {
+    saveCurrentText(textEl.value);
+  }
+});
+window.addEventListener('pagehide', () => {
+  if (textEl.value) saveCurrentText(textEl.value);
+});
