@@ -575,7 +575,7 @@ function startCurrentSentencePlayback() {
         selectedSentenceIndex = nextIndex;
         startCurrentSentencePlayback();
       },
-      onError: () => {
+      onError: (event) => {
         if (!didStart && !retried && playbackState === 'playing') {
           retried = true;
         }
@@ -597,6 +597,17 @@ function startCurrentSentencePlayback() {
           updateToggleButton();
           return;
         }
+        if (playbackState !== 'playing') return;
+        // iOS Safari fires onerror with 'interrupted' when speech is cancelled
+        // internally (screen lock, notification, etc.). Retry the current sentence.
+        const errorType = event && event.error;
+        if (errorType === 'interrupted' && didStart && !retried) {
+          retried = true;
+          setTimeout(() => {
+            if (playbackState === 'playing') startCurrentSentencePlayback();
+          }, 300);
+          return;
+        }
         finishPlayback('再生エラー');
       }
     });
@@ -605,7 +616,9 @@ function startCurrentSentencePlayback() {
       if (!didStart && !retried && playbackState === 'playing' && stopReason === null) {
         retried = true;
         speechController.stop();
-        setTimeout(() => launchSpeech(), 60);
+        setTimeout(() => {
+          if (playbackState === 'playing') launchSpeech();
+        }, 60);
       }
     }, 350);
   };
