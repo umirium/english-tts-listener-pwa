@@ -39,6 +39,7 @@ let pausedSettingsChanged = false;
 let pausedUtteranceCleared = false;
 let playHistory = [];
 let historyIndex = -1;
+let speechGeneration = 0;
 
 function ensureDefaultSettings() {
   if (localStorage.getItem(STORAGE_RANDOM_KEY) === null) {
@@ -64,7 +65,14 @@ function setStatus(mode, message = null) {
   if (mode === 'playing') statusDot.classList.add('running');
   else statusDot.classList.remove('running');
 }
-function showEditorMode() { editorWrapEl.style.display = 'block'; readingWrapEl.style.display = 'none'; }
+function showEditorMode() {
+  editorWrapEl.style.display = 'block';
+  readingWrapEl.style.display = 'none';
+  // iOS Safari sometimes fails to render textarea content after a display change.
+  // Re-assigning the value forces a repaint.
+  const v = textEl.value;
+  if (v) requestAnimationFrame(() => { textEl.value = v; });
+}
 function showReadingMode() { editorWrapEl.style.display = 'none'; readingWrapEl.style.display = 'block'; }
 function openSettingsPanel() {
   bottomSettingsEl.classList.add('show');
@@ -483,6 +491,7 @@ function ensureCurrentRecord() {
   return result;
 }
 function finishPlayback(message) {
+  speechGeneration++;
   playbackState = 'idle';
   sentenceQueue = [];
   randomPool = [];
@@ -518,6 +527,7 @@ function startCurrentSentencePlayback() {
   });
   updateToggleButton();
 
+  const generation = ++speechGeneration;
   let didStart = false;
   let retried = false;
 
@@ -527,6 +537,7 @@ function startCurrentSentencePlayback() {
       rate: Number(rateRangeEl.value),
       voiceName: voiceSelectEl.value,
       onStart: () => {
+        if (generation !== speechGeneration) return;
         didStart = true;
         playbackState = 'playing';
         manualPauseActive = false;
@@ -537,6 +548,7 @@ function startCurrentSentencePlayback() {
         updateToggleButton();
       },
       onEnd: () => {
+        if (generation !== speechGeneration) return;
         if (stopReason === 'jump') {
           performPendingJump();
           return;
@@ -576,9 +588,7 @@ function startCurrentSentencePlayback() {
         startCurrentSentencePlayback();
       },
       onError: (event) => {
-        if (!didStart && !retried && playbackState === 'playing') {
-          retried = true;
-        }
+        if (generation !== speechGeneration) return;
         if (stopReason === 'jump') {
           performPendingJump();
           return;
@@ -599,12 +609,15 @@ function startCurrentSentencePlayback() {
         }
         if (playbackState !== 'playing') return;
         // iOS Safari fires onerror with 'interrupted' when speech is cancelled
-        // internally (screen lock, notification, etc.). Retry the current sentence.
+        // externally (screen lock, notification, etc.). Retry the current sentence.
         const errorType = event && event.error;
-        if (errorType === 'interrupted' && didStart && !retried) {
+        if (errorType === 'interrupted' && !retried) {
           retried = true;
+          const retryGen = generation;
           setTimeout(() => {
-            if (playbackState === 'playing') startCurrentSentencePlayback();
+            if (playbackState === 'playing' && retryGen === speechGeneration) {
+              startCurrentSentencePlayback();
+            }
           }, 300);
           return;
         }
@@ -613,11 +626,12 @@ function startCurrentSentencePlayback() {
     });
 
     setTimeout(() => {
+      if (generation !== speechGeneration) return;
       if (!didStart && !retried && playbackState === 'playing' && stopReason === null) {
         retried = true;
         speechController.stop();
         setTimeout(() => {
-          if (playbackState === 'playing') launchSpeech();
+          if (playbackState === 'playing' && generation === speechGeneration) launchSpeech();
         }, 60);
       }
     }, 350);
