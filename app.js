@@ -20,6 +20,7 @@ const settingsOverlayEl = document.getElementById('settingsOverlay');
 const randomToggleBtn = document.getElementById('randomToggleBtn');
 const repeatToggleBtn = document.getElementById('repeatToggleBtn');
 const autoplayToggleBtn = document.getElementById('autoplayToggleBtn');
+const playbackUnitToggleBtn = document.getElementById('playbackUnitToggleBtn');
 
 let currentRecordId = null;
 let playbackState = 'idle';
@@ -28,6 +29,7 @@ let currentSentenceIndex = 0;
 const STORAGE_RANDOM_KEY = 'tts_listener_random';
 const STORAGE_REPEAT_MODE_KEY = 'tts_listener_repeat_mode';
 const STORAGE_AUTOPLAY_KEY = 'tts_listener_autoplay';
+const STORAGE_PLAYBACK_UNIT_KEY = 'tts_listener_playback_unit';
 let stopReason = null; // null | 'jump' | 'stop'
 let pendingJumpIndex = null;
 let pausedAtSentenceEnd = false;
@@ -50,11 +52,27 @@ function ensureDefaultSettings() {
   if (localStorage.getItem(STORAGE_AUTOPLAY_KEY) === null) {
     localStorage.setItem(STORAGE_AUTOPLAY_KEY, '1');
   }
+  if (localStorage.getItem(STORAGE_PLAYBACK_UNIT_KEY) === null) {
+    localStorage.setItem(STORAGE_PLAYBACK_UNIT_KEY, 'sentence');
+  }
 }
 
 
 function splitSentences(text) {
   return text.replace(/\r\n/g, '\n').split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
+}
+function getPlaybackUnit() {
+  return localStorage.getItem(STORAGE_PLAYBACK_UNIT_KEY) === 'full' ? 'full' : 'sentence';
+}
+function isFullPlaybackEnabled() {
+  return getPlaybackUnit() === 'full';
+}
+function splitPlaybackUnits(text) {
+  if (isFullPlaybackEnabled()) {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    return normalized ? [normalized] : [];
+  }
+  return splitSentences(text);
 }
 function setStatus(mode, message = null) {
   if (message) statusText.textContent = message;
@@ -129,7 +147,7 @@ function renderSentenceList(activeIndex = -1) {
 
     const idx = document.createElement('span');
     idx.className = 'sentence-index';
-    idx.textContent = `Sentence ${index + 1}`;
+    idx.textContent = isFullPlaybackEnabled() ? '全文' : `Sentence ${index + 1}`;
 
     const text = document.createElement('div');
     text.textContent = sentence;
@@ -194,6 +212,12 @@ function updateAutoplayButton() {
   autoplayToggleBtn.classList.toggle('active', enabled);
   autoplayToggleBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
   autoplayToggleBtn.textContent = '⏭️';
+}
+function updatePlaybackUnitButton() {
+  const full = isFullPlaybackEnabled();
+  playbackUnitToggleBtn.classList.toggle('active', full);
+  playbackUnitToggleBtn.setAttribute('aria-pressed', full ? 'true' : 'false');
+  playbackUnitToggleBtn.textContent = full ? '全文' : '文';
 }
 function isAutoplayEnabled() {
   return localStorage.getItem(STORAGE_AUTOPLAY_KEY) !== '0';
@@ -435,7 +459,7 @@ function renderSavedList() {
       textEl.value = record.text;
       currentRecordId = record.id;
       saveCurrentText(record.text);
-      sentenceQueue = splitSentences(record.text);
+      sentenceQueue = splitPlaybackUnits(record.text);
       showEditorMode();
       setStatus('idle', '保存済みテキストを読み込みました');
       updateToggleButton();
@@ -676,7 +700,7 @@ function startPlayback() {
   const ensured = ensureCurrentRecord();
   renderSavedList();
 
-  sentenceQueue = splitSentences(text);
+  sentenceQueue = splitPlaybackUnits(text);
   if (!sentenceQueue.length) {
     alert('再生できる文がありません。');
     return;
@@ -764,6 +788,14 @@ autoplayToggleBtn.addEventListener('click', () => {
   const next = !isAutoplayEnabled();
   localStorage.setItem(STORAGE_AUTOPLAY_KEY, next ? '1' : '0');
   updateAutoplayButton();
+});
+playbackUnitToggleBtn.addEventListener('click', () => {
+  if (playbackState !== 'idle') return;
+  const next = isFullPlaybackEnabled() ? 'sentence' : 'full';
+  localStorage.setItem(STORAGE_PLAYBACK_UNIT_KEY, next);
+  sentenceQueue = splitPlaybackUnits(textEl.value);
+  updatePlaybackUnitButton();
+  setStatus('idle', next === 'full' ? '全文再生モード' : '文ごと再生モード');
 });
 voiceSelectEl.addEventListener('change', () => {
   if (playbackState === 'paused') {
@@ -893,6 +925,7 @@ function loadSaved() {
   updateRandomButton();
   updateRepeatButton();
   updateAutoplayButton();
+  updatePlaybackUnitButton();
   updateRateLabel();
   renderSavedList();
   playbackState = 'idle';
