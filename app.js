@@ -1,6 +1,7 @@
 const textEl = document.getElementById('text');
 const voiceSelectEl = document.getElementById('voiceSelect');
-const rateRangeEl = document.getElementById('rateRange');
+const rateDownBtn = document.getElementById('rateDownBtn');
+const rateUpBtn = document.getElementById('rateUpBtn');
 const rateValueEl = document.getElementById('rateValue');
 const togglePlayBtn = document.getElementById('togglePlayBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -41,7 +42,15 @@ let pausedSettingsChanged = false;
 let pausedUtteranceCleared = false;
 let playHistory = [];
 let historyIndex = -1;
+let currentRate = 1.0;
+const STORAGE_VIEW_MODE_KEY = 'tts_listener_view_mode';
 let speechGeneration = 0;
+const GESTURE_TAP_MAX_DISTANCE = 12;
+const GESTURE_TAP_MAX_DURATION = 250;
+const GESTURE_SWIPE_MIN_DISTANCE = 40;
+const GESTURE_SWIPE_MAX_VERTICAL_DRIFT = 32;
+let playButtonGestureState = null;
+let suppressPlayButtonClick = false;
 
 function ensureDefaultSettings() {
   if (localStorage.getItem(STORAGE_RANDOM_KEY) === null) {
@@ -86,12 +95,17 @@ function setStatus(mode, message = null) {
 function showEditorMode() {
   editorWrapEl.style.display = 'block';
   readingWrapEl.style.display = 'none';
+  localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'editor');
   // iOS Safari sometimes fails to render textarea content after a display change.
   // Re-assigning the value forces a repaint.
   const v = textEl.value;
   if (v) requestAnimationFrame(() => { textEl.value = v; });
 }
-function showReadingMode() { editorWrapEl.style.display = 'none'; readingWrapEl.style.display = 'block'; }
+function showReadingMode() {
+  editorWrapEl.style.display = 'none';
+  readingWrapEl.style.display = 'block';
+  localStorage.setItem(STORAGE_VIEW_MODE_KEY, 'reading');
+}
 function openSettingsPanel() {
   bottomSettingsEl.classList.add('show');
   if (settingsOverlayEl) settingsOverlayEl.classList.add('show');
@@ -180,7 +194,8 @@ function renderSentenceList(activeIndex = -1) {
 function updateControlLock() {
   const locked = playbackState === 'playing';
   voiceSelectEl.disabled = locked;
-  rateRangeEl.disabled = locked;
+  rateDownBtn.disabled = locked;
+  rateUpBtn.disabled = locked;
 
   if (isRandomEnabled()) {
     prevBtn.disabled = !sentenceQueue.length || !canGoPrevHistory();
@@ -238,6 +253,99 @@ function updateRandomButton() {
 }
 function isRandomEnabled() {
   return localStorage.getItem(STORAGE_RANDOM_KEY) === '1';
+}
+function triggerPlayToggle() {
+  togglePlayBtn.click();
+}
+function triggerPrevSentence() {
+  prevBtn.click();
+}
+function triggerNextSentence() {
+  nextBtn.click();
+}
+function setPlayButtonGestureVisual(state) {
+  togglePlayBtn.classList.toggle('gesture-active', state !== 'idle');
+  togglePlayBtn.classList.toggle('gesture-swipe-left', state === 'left');
+  togglePlayBtn.classList.toggle('gesture-swipe-right', state === 'right');
+}
+function canHandlePlayButtonGestureStart(event) {
+  if (!event.isPrimary) return false;
+  if (event.pointerType === 'mouse') return false;
+  const target = event.target;
+  if (!(target instanceof Element)) return false;
+  if (!target.closest('#togglePlayBtn')) {
+    return false;
+  }
+  return true;
+}
+function handlePlayButtonPointerDown(event) {
+  if (!canHandlePlayButtonGestureStart(event)) return;
+  if (typeof togglePlayBtn.setPointerCapture === 'function') {
+    togglePlayBtn.setPointerCapture(event.pointerId);
+  }
+  playButtonGestureState = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    startTime: Date.now()
+  };
+  setPlayButtonGestureVisual('active');
+}
+function handlePlayButtonPointerMove(event) {
+  if (!playButtonGestureState || playButtonGestureState.pointerId !== event.pointerId) return;
+  const deltaX = event.clientX - playButtonGestureState.startX;
+  const deltaY = event.clientY - playButtonGestureState.startY;
+  const absX = Math.abs(deltaX);
+  const absY = Math.abs(deltaY);
+
+  if (absX >= 10 && absX > absY) {
+    setPlayButtonGestureVisual(deltaX > 0 ? 'right' : 'left');
+    return;
+  }
+
+  setPlayButtonGestureVisual('active');
+}
+function finishPlayButtonGesture(event) {
+  if (!playButtonGestureState || playButtonGestureState.pointerId !== event.pointerId) return;
+  if (typeof togglePlayBtn.releasePointerCapture === 'function' && togglePlayBtn.hasPointerCapture(event.pointerId)) {
+    togglePlayBtn.releasePointerCapture(event.pointerId);
+  }
+
+  const deltaX = event.clientX - playButtonGestureState.startX;
+  const deltaY = event.clientY - playButtonGestureState.startY;
+  const absX = Math.abs(deltaX);
+  const absY = Math.abs(deltaY);
+  const duration = Date.now() - playButtonGestureState.startTime;
+
+  playButtonGestureState = null;
+  setPlayButtonGestureVisual('idle');
+
+  if (absX >= GESTURE_SWIPE_MIN_DISTANCE && absY <= GESTURE_SWIPE_MAX_VERTICAL_DRIFT && absX > absY) {
+    suppressPlayButtonClick = true;
+    if (deltaX > 0) triggerPrevSentence();
+    else triggerNextSentence();
+    return;
+  }
+
+  if (duration <= GESTURE_TAP_MAX_DURATION && absX <= GESTURE_TAP_MAX_DISTANCE && absY <= GESTURE_TAP_MAX_DISTANCE) {
+    suppressPlayButtonClick = true;
+    triggerPlayToggle();
+  }
+}
+function cancelPlayButtonGesture(event) {
+  if (!playButtonGestureState) return;
+  if (event && playButtonGestureState.pointerId !== event.pointerId) return;
+  if (event && typeof togglePlayBtn.releasePointerCapture === 'function' && togglePlayBtn.hasPointerCapture(event.pointerId)) {
+    togglePlayBtn.releasePointerCapture(event.pointerId);
+  }
+  playButtonGestureState = null;
+  setPlayButtonGestureVisual('idle');
+}
+function suppressPlayButtonGestureClick(event) {
+  if (!suppressPlayButtonClick) return;
+  suppressPlayButtonClick = false;
+  event.preventDefault();
+  event.stopPropagation();
 }
 function resetRandomPool(excludeIndex = null) {
   randomPool = [];
@@ -380,9 +488,20 @@ function continueFromSentenceEndPause() {
   startCurrentSentencePlayback();
 }
 function updateRateLabel() {
-  const value = Number(rateRangeEl.value).toFixed(1);
-  rateValueEl.textContent = `${value}x`;
-  saveRate(value);
+  rateValueEl.textContent = `${currentRate.toFixed(1)}x`;
+}
+function setRate(nextRate, { markPausedChange = true } = {}) {
+  const clamped = Math.max(0.1, Math.min(2.0, Math.round(nextRate * 10) / 10));
+  if (Math.abs(clamped - currentRate) < 0.001) return;
+  currentRate = clamped;
+  saveRate(currentRate.toFixed(1));
+  updateRateLabel();
+  if (markPausedChange && playbackState === 'paused') {
+    pausedSettingsChanged = true;
+    pausedSentenceNeedsReplay = true;
+    if (manualPauseActive) clearPausedUtterance();
+    renderSentenceList(currentSentenceIndex);
+  }
 }
 function createPreview(text, max = 120) {
   const normalized = normalizeText(text);
@@ -399,6 +518,7 @@ function formatDate(timestamp) {
 }
 function populateVoices() {
   const voices = speechController.getEnglishVoices().length ? speechController.getEnglishVoices() : speechController.getVoices();
+  const savedVoice = getSavedVoice();
   voiceSelectEl.innerHTML = '';
   voices.forEach(voice => {
     const option = document.createElement('option');
@@ -503,13 +623,13 @@ function saveCurrentTextManually() {
     renderSavedList();
     return;
   }
-  const record = createRecord(rawText, { lastRate: Number(rateRangeEl.value) });
+  const record = createRecord(rawText, { lastRate: currentRate });
   currentRecordId = record.id;
   renderSavedList();
   setStatus('idle', 'テキストを保存しました');
 }
 function ensureCurrentRecord() {
-  const result = ensureRecordForText(textEl.value, { lastRate: Number(rateRangeEl.value) });
+  const result = ensureRecordForText(textEl.value, { lastRate: currentRate });
   if (!result || !result.record) return null;
   currentRecordId = result.record.id;
   return result;
@@ -558,7 +678,7 @@ function startCurrentSentencePlayback() {
   const launchSpeech = () => {
     speechController.speak({
       text: sentenceQueue[currentSentenceIndex],
-      rate: Number(rateRangeEl.value),
+      rate: currentRate,
       voiceName: voiceSelectEl.value,
       onStart: () => {
         if (generation !== speechGeneration) return;
@@ -761,7 +881,7 @@ function startPlayback() {
   if (currentRecordId) {
     touchRecord(currentRecordId, {
       incrementPlayCount: 1,
-      lastRate: Number(rateRangeEl.value),
+      lastRate: currentRate,
       lastVoiceName: voiceSelectEl.value
     });
     renderSavedList();
@@ -779,15 +899,8 @@ textEl.addEventListener('input', () => {
   currentRecordId = null;
 });
 
-rateRangeEl.addEventListener('input', () => {
-  updateRateLabel();
-  if (playbackState === 'paused') {
-    pausedSettingsChanged = true;
-    pausedSentenceNeedsReplay = true;
-    if (manualPauseActive) clearPausedUtterance();
-    renderSentenceList(currentSentenceIndex);
-  }
-});
+rateDownBtn.addEventListener('click', () => setRate(currentRate - 0.1));
+rateUpBtn.addEventListener('click', () => setRate(currentRate + 0.1));
 
 
 randomToggleBtn.addEventListener('click', () => {
@@ -825,6 +938,7 @@ playbackUnitToggleBtn.addEventListener('click', () => {
   setStatus('idle', next === 'full' ? '全文再生モード' : '文ごと再生モード');
 });
 voiceSelectEl.addEventListener('change', () => {
+  saveVoice(voiceSelectEl.value);
   if (playbackState === 'paused') {
     pausedSettingsChanged = true;
     pausedSentenceNeedsReplay = true;
@@ -938,6 +1052,12 @@ nextBtn.addEventListener('click', () => {
   }
 });
 settingsOverlayEl.addEventListener('click',()=>closeSettingsPanel());
+togglePlayBtn.addEventListener('pointerdown', handlePlayButtonPointerDown);
+togglePlayBtn.addEventListener('pointermove', handlePlayButtonPointerMove);
+togglePlayBtn.addEventListener('pointerup', finishPlayButtonGesture);
+togglePlayBtn.addEventListener('pointercancel', cancelPlayButtonGesture);
+togglePlayBtn.addEventListener('pointerleave', cancelPlayButtonGesture);
+togglePlayBtn.addEventListener('click', suppressPlayButtonGestureClick, true);
 
 toggleSettingsBtn.addEventListener('click', () => {
   const show = !bottomSettingsEl.classList.contains('show');
@@ -948,7 +1068,7 @@ toggleSettingsBtn.addEventListener('click', () => {
 function loadSaved() {
   ensureDefaultSettings();
   textEl.value = getCurrentText();
-  rateRangeEl.value = getSavedRate();
+  currentRate = Math.max(0.1, Math.min(2.0, Number(getSavedRate()) || 1.0));
   updateRandomButton();
   updateRepeatButton();
   updateAutoplayButton();
@@ -969,7 +1089,15 @@ function loadSaved() {
   manualPauseActive = false;
   pausedSettingsChanged = false;
   pausedUtteranceCleared = false;
-  showEditorMode();
+  const lastViewMode = localStorage.getItem(STORAGE_VIEW_MODE_KEY);
+  if (lastViewMode === 'reading' && textEl.value.trim()) {
+    sentenceQueue = splitPlaybackUnits(textEl.value);
+    selectedSentenceIndex = sentenceQueue.length ? 0 : -1;
+    renderSentenceList(-1);
+    showReadingMode();
+  } else {
+    showEditorMode();
+  }
   setStatus('idle');
   updateToggleButton();
 }
