@@ -17,16 +17,18 @@
     .app-icon { width:32px; height:32px; border-radius:10px; background:linear-gradient(180deg, #223447, #15202c); display:grid; place-items:center; font-size:16px; border:1px solid #314255; color:#fff; flex:0 0 auto; }
     h1 { margin:0; font-size:18px; letter-spacing:.01em; font-weight:700; }
     label { display:block; font-weight:700; margin-bottom:8px; letter-spacing:.01em; }
-    select, input[type="range"] { width:100%; }
+    select { width:100%; }
     select { border:1px solid var(--line); border-radius:14px; padding:12px; background:#0f141b; color:var(--text); font-size:16px; outline:none; }
-    select:disabled, input[type="range"]:disabled { opacity:.55; }
+    select:disabled { opacity:.55; }
     .range-wrap { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:#0f141b; }
     .range-top { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; font-size:14px; }
-    .ticks { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-top:6px; user-select:none; }
+    .rate-stepper { display:grid; grid-template-columns:44px 1fr 44px; gap:10px; align-items:center; }
+    .rate-step-btn { min-height:44px; padding:0; border-radius:12px; font-size:20px; line-height:1; }
+    .rate-display { border:1px solid var(--line); border-radius:12px; min-height:44px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; background:rgba(255,255,255,.02); }
     .editor-wrap, .reading-wrap { width:100%; }
     textarea { width:100%; min-height:62vh; border:1px solid var(--line); border-radius:16px; padding:16px; font-size:20px; line-height:1.7; resize:vertical; background:#0f141b; color:var(--text); outline:none; -webkit-text-size-adjust:100%; }
     textarea:focus { border-color:#4b6a87; box-shadow:0 0 0 3px rgba(124,196,255,.12); }
-    .reading-wrap { display:none; min-height:62vh; border:1px solid var(--line); border-radius:16px; background:#0f141b; padding:14px; overflow:auto; }
+    .reading-wrap { display:none; min-height:62vh; border:1px solid var(--line); border-radius:16px; background:#0f141b; padding:14px; overflow:auto; touch-action:pan-y; }
     .sentence-list { display:grid; gap:10px; }
     button { touch-action: manipulation; }
     .sentence-item { touch-action: manipulation; border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:rgba(255,255,255,.02); transition:background-color .15s ease,border-color .15s ease,transform .15s ease; line-height:1.8; font-size:19px; word-break:break-word; }
@@ -49,6 +51,10 @@
     button { appearance:none; border:1px solid var(--line); background:linear-gradient(180deg, #17202a, #121922); color:var(--text); border-radius:16px; padding:14px 12px; font-size:16px; font-weight:800; cursor:pointer; min-height:52px; }
     button.primary { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
     button:disabled { opacity:.45; cursor:default; }
+    #togglePlayBtn { transition:transform .16s ease, box-shadow .16s ease, filter .16s ease; will-change:transform, box-shadow; }
+    #togglePlayBtn.gesture-active { transform:scale(1.03); box-shadow:0 0 0 2px rgba(137,208,255,.32), 0 10px 24px rgba(97,184,255,.22); filter:saturate(1.08); }
+    #togglePlayBtn.gesture-swipe-left { transform:translateX(-10px) scale(1.03); box-shadow:0 0 0 2px rgba(252,165,165,.34), 0 10px 24px rgba(252,165,165,.18); }
+    #togglePlayBtn.gesture-swipe-right { transform:translateX(10px) scale(1.03); box-shadow:0 0 0 2px rgba(110,231,183,.34), 0 10px 24px rgba(110,231,183,.18); }
     .settings-overlay { position:fixed; inset:0; z-index:29; background:rgba(0,0,0,0.01); opacity:0; pointer-events:none; }
     .settings-overlay.show { opacity:1; pointer-events:auto; }
     .bottom-controls { position:fixed; left:0; right:0; bottom:0; z-index:30; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(8,12,17,.95); backdrop-filter:blur(10px); border-top:1px solid var(--line); }
@@ -69,7 +75,6 @@
     .small-field select { padding:10px; font-size:14px; }
     .small-field .range-wrap { padding:10px 12px; }
     .small-field .range-top { font-size:12px; }
-    .small-field .ticks { font-size:10px; }
     .bottom-top { display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr; gap:10px; }
     @media (max-width:640px) {
       .wrap { padding:12px; padding-bottom:calc(210px + env(safe-area-inset-bottom)); }
@@ -136,14 +141,14 @@
             <select id="voiceSelect"></select>
           </div>
           <div class="small-field">
-            <label for="rateRange">再生速度</label>
+            <label for="rateDownBtn">再生速度</label>
             <div class="range-wrap">
-              <div class="range-top"><span>Rate</span><span id="rateValue">1.0x</span></div>
-              <input id="rateRange" type="range" min="0.1" max="2.0" step="0.1" value="1.0" list="rateTicks" />
-              <datalist id="rateTicks">
-                <option value="0.1"></option><option value="0.5"></option><option value="1.0"></option><option value="1.5"></option><option value="2.0"></option>
-              </datalist>
-              <div class="ticks"><span>0.1</span><span>0.5</span><span>1.0</span><span>1.5</span><span>2.0</span></div>
+              <div class="range-top"><span>Rate</span><span>0.1 〜 2.0</span></div>
+              <div class="rate-stepper">
+                <button id="rateDownBtn" class="rate-step-btn" aria-label="再生速度を下げる">−</button>
+                <div id="rateValue" class="rate-display">1.0x</div>
+                <button id="rateUpBtn" class="rate-step-btn" aria-label="再生速度を上げる">＋</button>
+              </div>
             </div>
           </div>
 
