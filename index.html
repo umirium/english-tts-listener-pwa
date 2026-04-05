@@ -51,13 +51,18 @@
     button { appearance:none; border:1px solid var(--line); background:linear-gradient(180deg, #17202a, #121922); color:var(--text); border-radius:16px; padding:14px 12px; font-size:16px; font-weight:800; cursor:pointer; min-height:52px; }
     button.primary { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
     button:disabled { opacity:.45; cursor:default; }
-    #togglePlayBtn { transition:transform .16s ease, box-shadow .16s ease, filter .16s ease; will-change:transform, box-shadow; }
+    #togglePlayBtn { position:relative; touch-action:none; user-select:none; -webkit-user-select:none; transition:transform .16s ease, box-shadow .16s ease, filter .16s ease; will-change:transform, box-shadow; overflow:hidden; }
+    #togglePlayBtn::before, #togglePlayBtn::after { position:absolute; top:50%; transform:translateY(-50%); font-size:14px; font-weight:900; opacity:.28; pointer-events:none; transition:opacity .16s ease, transform .16s ease; }
+    #togglePlayBtn::before { content:"←"; left:10px; }
+    #togglePlayBtn::after { content:"→"; right:10px; }
     #togglePlayBtn.gesture-active { transform:scale(1.03); box-shadow:0 0 0 2px rgba(137,208,255,.32), 0 10px 24px rgba(97,184,255,.22); filter:saturate(1.08); }
     #togglePlayBtn.gesture-swipe-left { transform:translateX(-10px) scale(1.03); box-shadow:0 0 0 2px rgba(252,165,165,.34), 0 10px 24px rgba(252,165,165,.18); }
     #togglePlayBtn.gesture-swipe-right { transform:translateX(10px) scale(1.03); box-shadow:0 0 0 2px rgba(110,231,183,.34), 0 10px 24px rgba(110,231,183,.18); }
+    #togglePlayBtn.gesture-swipe-left::before { opacity:.9; transform:translateY(-50%) translateX(-4px) scale(1.15); }
+    #togglePlayBtn.gesture-swipe-right::after { opacity:.9; transform:translateY(-50%) translateX(4px) scale(1.15); }
     .settings-overlay { position:fixed; inset:0; z-index:29; background:rgba(0,0,0,0.01); opacity:0; pointer-events:none; }
     .settings-overlay.show { opacity:1; pointer-events:auto; }
-    .bottom-controls { position:fixed; left:0; right:0; bottom:0; z-index:30; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(8,12,17,.95); backdrop-filter:blur(10px); border-top:1px solid var(--line); }
+    .bottom-controls { position:fixed; left:0; right:0; bottom:0; z-index:30; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:rgba(8,12,17,.95); backdrop-filter:blur(10px); border-top:1px solid var(--line); overscroll-behavior:contain; }
     .bottom-inner { max-width:860px; margin:0 auto; display:grid; gap:10px; }
     .bottom-status-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .status-fixed { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:rgba(255,255,255,.02); color:var(--muted); font-size:13px; font-weight:700; }
@@ -69,13 +74,14 @@
     .compact-btn.icon-only { min-width:38px; padding:8px; }
     .compact-btn.active { background:linear-gradient(180deg, #89d0ff, #61b8ff); color:#05111d; border-color:#8fd2ff; }
     .bottom-settings { display:block; border:1px solid var(--line); border-radius:16px; padding:0 12px; background:rgba(255,255,255,.02); overflow:hidden; max-height:0; opacity:0; transform:translateY(-6px); transition:max-height .28s ease, opacity .22s ease, transform .22s ease, padding-top .22s ease, padding-bottom .22s ease; pointer-events:none; }
-    .bottom-settings.show { max-height:260px; opacity:1; transform:translateY(0); padding-top:12px; padding-bottom:12px; pointer-events:auto; }
+    .bottom-settings.show { max-height:260px; opacity:1; transform:translateY(0); padding-top:12px; padding-bottom:12px; pointer-events:auto; overscroll-behavior:contain; }
     .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .small-field label { font-size:12px; margin-bottom:6px; }
     .small-field select { padding:10px; font-size:14px; }
     .small-field .range-wrap { padding:10px 12px; }
     .small-field .range-top { font-size:12px; }
-    .bottom-top { display:grid; grid-template-columns:1fr 1.2fr 1fr 1fr; gap:10px; }
+    .bottom-top { display:grid; grid-template-columns:minmax(0, 2.4fr) minmax(0, 1fr); gap:10px; }
+    .bottom-top #togglePlayBtn { font-size:20px; }
     @media (max-width:640px) {
       .wrap { padding:12px; padding-bottom:calc(210px + env(safe-area-inset-bottom)); }
       textarea { min-height:64vh; }
@@ -86,8 +92,9 @@
       h1 { font-size:24px; }
       .saved-meta, .settings-grid { grid-template-columns:1fr; }
       .bottom-status-row { align-items:center; flex-direction:row; }
-      .bottom-top { grid-template-columns:1fr 1.2fr 1fr 1fr; gap:8px; }
+      .bottom-top { grid-template-columns:minmax(0, 2.6fr) minmax(0, 1fr); gap:8px; }
       .bottom-top button { font-size:15px; min-height:54px; padding:12px 8px; }
+      .bottom-top #togglePlayBtn { font-size:22px; }
       .status-actions { gap:6px; }
       .compact-btn { font-size:12px; min-height:34px; padding:6px 8px; }
     }
@@ -155,9 +162,7 @@
         </div>
       </div>
       <div class="bottom-top">
-        <button id="prevBtn">前の文</button>
         <button id="togglePlayBtn" class="primary">再生</button>
-        <button id="nextBtn">次の文</button>
         <button id="stopBtn">停止</button>
       </div>
     </div>

@@ -13,8 +13,6 @@ const emptyStateEl = document.getElementById('emptyState');
 const editorWrapEl = document.getElementById('editorWrap');
 const readingWrapEl = document.getElementById('readingWrap');
 const sentenceListEl = document.getElementById('sentenceList');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
 const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
 const bottomSettingsEl = document.getElementById('bottomSettings');
 const settingsOverlayEl = document.getElementById('settingsOverlay');
@@ -47,10 +45,11 @@ const STORAGE_VIEW_MODE_KEY = 'tts_listener_view_mode';
 let speechGeneration = 0;
 const GESTURE_TAP_MAX_DISTANCE = 12;
 const GESTURE_TAP_MAX_DURATION = 250;
-const GESTURE_SWIPE_MIN_DISTANCE = 40;
-const GESTURE_SWIPE_MAX_VERTICAL_DRIFT = 32;
+const GESTURE_SWIPE_MIN_DISTANCE = 24;
+const GESTURE_SWIPE_MAX_VERTICAL_DRIFT = 40;
 let playButtonGestureState = null;
 let suppressPlayButtonClick = false;
+let gestureStatusResetTimer = null;
 
 function ensureDefaultSettings() {
   if (localStorage.getItem(STORAGE_RANDOM_KEY) === null) {
@@ -196,14 +195,6 @@ function updateControlLock() {
   voiceSelectEl.disabled = locked;
   rateDownBtn.disabled = locked;
   rateUpBtn.disabled = locked;
-
-  if (isRandomEnabled()) {
-    prevBtn.disabled = !sentenceQueue.length || !canGoPrevHistory();
-    nextBtn.disabled = !sentenceQueue.length || (!isRepeatAllEnabled() && randomPool.length === 0 && !canGoNextHistory());
-  } else {
-    prevBtn.disabled = !sentenceQueue.length || currentSentenceIndex <= 0;
-    nextBtn.disabled = !sentenceQueue.length || currentSentenceIndex >= sentenceQueue.length - 1;
-  }
 }
 function updateToggleButton() {
   let label = '再生';
@@ -255,13 +246,26 @@ function isRandomEnabled() {
   return localStorage.getItem(STORAGE_RANDOM_KEY) === '1';
 }
 function triggerPlayToggle() {
-  togglePlayBtn.click();
+  handleTogglePlayRequest();
 }
 function triggerPrevSentence() {
-  prevBtn.click();
+  flashGestureStatus('前の文へ移動');
+  handlePrevSentenceRequest();
 }
 function triggerNextSentence() {
-  nextBtn.click();
+  flashGestureStatus('次の文へ移動');
+  handleNextSentenceRequest();
+}
+function flashGestureStatus(message) {
+  if (gestureStatusResetTimer) {
+    clearTimeout(gestureStatusResetTimer);
+    gestureStatusResetTimer = null;
+  }
+  setStatus(playbackState === 'playing' ? 'playing' : playbackState === 'paused' ? 'paused' : 'idle', message);
+  gestureStatusResetTimer = setTimeout(() => {
+    gestureStatusResetTimer = null;
+    setStatus(playbackState);
+  }, 900);
 }
 function setPlayButtonGestureVisual(state) {
   togglePlayBtn.classList.toggle('gesture-active', state !== 'idle');
@@ -271,6 +275,7 @@ function setPlayButtonGestureVisual(state) {
 function canHandlePlayButtonGestureStart(event) {
   if (!event.isPrimary) return false;
   if (event.pointerType === 'mouse') return false;
+  if (editorWrapEl.style.display !== 'none') return false;
   const target = event.target;
   if (!(target instanceof Element)) return false;
   if (!target.closest('#togglePlayBtn')) {
@@ -322,8 +327,8 @@ function finishPlayButtonGesture(event) {
 
   if (absX >= GESTURE_SWIPE_MIN_DISTANCE && absY <= GESTURE_SWIPE_MAX_VERTICAL_DRIFT && absX > absY) {
     suppressPlayButtonClick = true;
-    if (deltaX > 0) triggerPrevSentence();
-    else triggerNextSentence();
+    if (deltaX > 0) triggerNextSentence();
+    else triggerPrevSentence();
     return;
   }
 
@@ -345,6 +350,9 @@ function suppressPlayButtonGestureClick(event) {
   if (!suppressPlayButtonClick) return;
   suppressPlayButtonClick = false;
   event.preventDefault();
+  event.stopPropagation();
+}
+function stopSettingsPanelPropagation(event) {
   event.stopPropagation();
 }
 function resetRandomPool(excludeIndex = null) {
@@ -948,7 +956,7 @@ voiceSelectEl.addEventListener('change', () => {
 });
 saveBtn.addEventListener('click', saveCurrentTextManually);
 
-togglePlayBtn.addEventListener('click', () => {
+function handleTogglePlayRequest() {
   if (playbackState === 'paused') {
     if (pausedAtSentenceEnd) {
       continueFromSentenceEndPause();
@@ -989,7 +997,41 @@ togglePlayBtn.addEventListener('click', () => {
     return;
   }
   startPlayback();
-});
+}
+function handlePrevSentenceRequest() {
+  if (isRandomEnabled()) {
+    const prevIndex = moveToPrevHistory();
+    if (prevIndex !== null && prevIndex !== undefined) {
+      jumpToSentence(prevIndex);
+    }
+    return;
+  }
+
+  const prevIndex = currentSentenceIndex > 0
+    ? currentSentenceIndex - 1
+    : (isRepeatAllEnabled() && sentenceQueue.length ? sentenceQueue.length - 1 : null);
+
+  if (prevIndex !== null && prevIndex !== undefined) {
+    jumpToSentence(prevIndex);
+  }
+}
+function handleNextSentenceRequest() {
+  if (!sentenceQueue.length) return;
+
+  if (isRandomEnabled()) {
+    const nextIndex = getNextRandomPlaybackIndex();
+    if (nextIndex !== null && nextIndex !== undefined) {
+      jumpToSentence(nextIndex);
+    }
+    return;
+  }
+
+  const nextIndex = getNextSequentialIndex();
+  if (nextIndex !== null && nextIndex !== undefined) {
+    jumpToSentence(nextIndex);
+  }
+}
+togglePlayBtn.addEventListener('click', handleTogglePlayRequest);
 stopBtn.addEventListener('click', () => {
   if (playbackState === 'idle') {
     setStatus('idle', '停止しました');
@@ -1018,40 +1060,10 @@ stopBtn.addEventListener('click', () => {
   updateRepeatButton();
   updateAutoplayButton();
 });
-prevBtn.addEventListener('click', () => {
-  if (isRandomEnabled()) {
-    const prevIndex = moveToPrevHistory();
-    if (prevIndex !== null && prevIndex !== undefined) {
-      jumpToSentence(prevIndex);
-    }
-    return;
-  }
-
-  const prevIndex = currentSentenceIndex > 0
-    ? currentSentenceIndex - 1
-    : (isRepeatAllEnabled() && sentenceQueue.length ? sentenceQueue.length - 1 : null);
-
-  if (prevIndex !== null && prevIndex !== undefined) {
-    jumpToSentence(prevIndex);
-  }
-});
-nextBtn.addEventListener('click', () => {
-  if (!sentenceQueue.length) return;
-
-  if (isRandomEnabled()) {
-    const nextIndex = getNextRandomPlaybackIndex();
-    if (nextIndex !== null && nextIndex !== undefined) {
-      jumpToSentence(nextIndex);
-    }
-    return;
-  }
-
-  const nextIndex = getNextSequentialIndex();
-  if (nextIndex !== null && nextIndex !== undefined) {
-    jumpToSentence(nextIndex);
-  }
-});
 settingsOverlayEl.addEventListener('click',()=>closeSettingsPanel());
+['pointerdown', 'pointermove', 'pointerup', 'click', 'touchstart', 'touchmove', 'touchend'].forEach((eventName) => {
+  bottomSettingsEl.addEventListener(eventName, stopSettingsPanelPropagation, { passive: true });
+});
 togglePlayBtn.addEventListener('pointerdown', handlePlayButtonPointerDown);
 togglePlayBtn.addEventListener('pointermove', handlePlayButtonPointerMove);
 togglePlayBtn.addEventListener('pointerup', finishPlayButtonGesture);
