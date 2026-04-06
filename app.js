@@ -20,6 +20,8 @@ const randomToggleBtn = document.getElementById('randomToggleBtn');
 const repeatToggleBtn = document.getElementById('repeatToggleBtn');
 const autoplayToggleBtn = document.getElementById('autoplayToggleBtn');
 const playbackUnitToggleBtn = document.getElementById('playbackUnitToggleBtn');
+const appVersionEl = document.getElementById('appVersion');
+const APP_VERSION = '6.1.0';
 
 let currentRecordId = null;
 let playbackState = 'idle';
@@ -1116,8 +1118,24 @@ function loadSaved() {
 loadSaved();
 populateVoices();
 speechController.waitForVoices(() => populateVoices());
+if (appVersionEl) appVersionEl.textContent = `Version ${APP_VERSION}`;
+
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  let hasReloadedForUpdate = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hasReloadedForUpdate) return;
+    hasReloadedForUpdate = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker
+    .register('./sw.js')
+    .then(registration => {
+      registration.update();
+      setInterval(() => registration.update(), 60 * 1000);
+    })
+    .catch(() => {});
 }
 
 // iOS Safari がバックグラウンド時にページを破棄することがあるため、

@@ -14,6 +14,7 @@
     .card { background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01)); border:1px solid var(--line); border-radius:22px; padding:16px; margin-bottom:16px; box-shadow:0 8px 24px rgba(0,0,0,.28); backdrop-filter:blur(8px); }
     .card.header-card { padding:10px 14px; }
     .app-header { display:flex; align-items:center; gap:10px; }
+    .version-text { display:block; margin-top:2px; color:var(--muted); font-size:12px; letter-spacing:.02em; }
     .app-icon { width:32px; height:32px; border-radius:10px; background:linear-gradient(180deg, #223447, #15202c); display:grid; place-items:center; font-size:16px; border:1px solid #314255; color:#fff; flex:0 0 auto; }
     h1 { margin:0; font-size:18px; letter-spacing:.01em; font-weight:700; }
     label { display:block; font-weight:700; margin-bottom:8px; letter-spacing:.01em; }
@@ -105,7 +106,7 @@
     <div class="card header-card">
       <div class="app-header">
         <div class="app-icon">🔊</div>
-        <h1>English TTS Listener</h1>
+        <div><h1>English TTS Listener</h1><small id="appVersion" class="version-text">Version --</small></div>
       </div>
     </div>
 
